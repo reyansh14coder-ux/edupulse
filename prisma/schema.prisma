@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String
+  phone     String?
+  title     String?
+  createdAt DateTime @default(now())
+
+  student        Student?
+  teaching       TeacherAssignment[]
+  children       ParentLink[]        @relation("parent")
+  guided         GuidanceNote[]      @relation("guideAuthor")
+  counseling     CounselingSession[] @relation("counselor")
+  homeworks      Homework[]
+}
+
+model SchoolClass {
+  id          String   @id @default(cuid())
+  name        String
+  section     String
+  year        String
+  board       String   @default("CBSE")
+  students    Student[]
+  assignments TeacherAssignment[]
+  assessments Assessment[]
+  homeworks   Homework[]
+  chapters    Chapter[]
+  quizzes     Quiz[]
+
+  @@unique([name, section, year])
+}
+
+model TeacherAssignment {
+  id          String      @id @default(cuid())
+  teacher     User        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId   String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  subject     String
+
+  @@unique([teacherId, classId, subject])
+}
+
+model Student {
+  id            String              @id @default(cuid())
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String              @unique
+  schoolClass   SchoolClass         @relation(fields: [classId], references: [id])
+  classId       String
+  rollNo        Int
+  admissionNo   String              @unique
+  attendance    Attendance[]
+  scores        Score[]
+  submissions   HomeworkSubmission[]
+  parentLinks   ParentLink[]
+  guidance      GuidanceNote[]
+  counseling    CounselingSession[]
+  attempts      QuizAttempt[]
+  recommendations Recommendation[]
+}
+
+model ParentLink {
+  id        String  @id @default(cuid())
+  parent    User    @relation("parent", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId  String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  @@unique([parentId, studentId])
+}
+
+model Attendance {
+  id        String  @id @default(cuid())
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  date      DateTime
+  status    String
+  note      String?
+
+  @@unique([studentId, date])
+}
+
+model Assessment {
+  id          String      @id @default(cuid())
+  title       String
+  type        String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  subject     String
+  date        DateTime
+  maxMarks    Int
+  scores      Score[]
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentId String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String
+  marks        Float
+
+  @@unique([assessmentId, studentId])
+}
+
+model Homework {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  kind        String              @default("HOMEWORK")
+  schoolClass SchoolClass         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  subject     String
+  assignedBy  User                @relation(fields: [assignedById], references: [id], onDelete: Cascade)
+  assignedById String
+  assignedOn  DateTime            @default(now())
+  dueDate     DateTime
+  submissions HomeworkSubmission[]
+}
+
+model Chapter {
+  id          String      @id @default(cuid())
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  subject     String
+  title       String
+  order       Int
+
+  @@unique([classId, subject, title])
+}
+
+model Quiz {
+  id          String        @id @default(cuid())
+  title       String
+  schoolClass SchoolClass   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId     String
+  subject     String
+  chapter     String?
+  questions   String
+  createdById String?
+  createdAt   DateTime      @default(now())
+  attempts    QuizAttempt[]
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId    String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  score     Int
+  total     Int
+  detail    String
+  createdAt DateTime @default(now())
+
+  @@unique([quizId, studentId])
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  kind      String
+  title     String
+  body      String
+  context   String?
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HomeworkSubmission {
+  id          String    @id @default(cuid())
+  homework    Homework  @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  homeworkId  String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  status      String
+  submittedOn DateTime?
+  remarks     String?
+
+  @@unique([homeworkId, studentId])
+}
+
+model GuidanceNote {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  author    User     @relation("guideAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  category  String
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model CounselingSession {
+  id           String   @id @default(cuid())
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String
+  counselor    User     @relation("counselor", fields: [counselorId], references: [id], onDelete: Cascade)
+  counselorId  String
+  scheduledFor DateTime
+  status       String
+  notes        String?
+}
