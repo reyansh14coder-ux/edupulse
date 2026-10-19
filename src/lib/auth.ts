@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import {
   SESSION_COOKIE,
-  SESSION_SECRET_FALLBACK,
+  SESSION_SECRET,
 } from "@/lib/session-constants";
 
 export { SESSION_COOKIE };
@@ -18,9 +18,7 @@ export type Session = {
   title?: string | null;
 };
 
-const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || SESSION_SECRET_FALLBACK
-);
+const secret = new TextEncoder().encode(SESSION_SECRET);
 
 export function homeFor(role: Role) {
   switch (role) {

@@ -2,12 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import {
   SESSION_COOKIE,
-  SESSION_SECRET_FALLBACK,
+  SESSION_SECRET,
 } from "@/lib/session-constants";
 
-const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || SESSION_SECRET_FALLBACK
-);
+const secret = new TextEncoder().encode(SESSION_SECRET);
 
 function homeFor(role: string) {
   switch (role) {
