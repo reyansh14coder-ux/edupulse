@@ -68,6 +68,7 @@ model Student {
   counseling    CounselingSession[]
   attempts      QuizAttempt[]
   recommendations Recommendation[]
+  goals         StudentGoal[]
 }
 
 model ParentLink {
@@ -176,8 +177,33 @@ model Recommendation {
   body      String
   context   String?
   status    String   @default("NEW")
+  plan       String?
+  planStatus String   @default("NONE")
+  planNote   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model StudentGoal {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  kind      String   @default("GOAL")
+  title     String
+  note      String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actorName String
+  action    String
+  subject   String?
+  detail    String?
+  createdAt DateTime @default(now())
 }
 
 model HomeworkSubmission {

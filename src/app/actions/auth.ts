@@ -20,12 +20,24 @@ export async function loginAction(
     return { error: "Email and password are required." };
   }
 
-  const user = await db.user.findUnique({ where: { email } });
-  if (!user || !(await compare(password, user.password))) {
-    return { error: "Invalid email or password." };
+  let user;
+  try {
+    user = await db.user.findUnique({ where: { email } });
+    if (!user || !(await compare(password, user.password))) {
+      return { error: "Invalid email or password." };
+    }
+  } catch {
+    return {
+      error:
+        "Could not reach the server — wait a few seconds (first load can be slow) and try again.",
+    };
   }
 
-  await createSession(user);
+  try {
+    await createSession(user);
+  } catch {
+    return { error: "Could not start your session — please try again." };
+  }
   redirect(homeFor(user.role as never));
 }
 

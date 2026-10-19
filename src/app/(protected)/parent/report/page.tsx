@@ -5,26 +5,43 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ListChecks,
   Mail,
   Target,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { weeklyReport } from "@/lib/insights";
+import { logAudit } from "@/lib/audit";
+import {
+  LANGS,
+  REPORT_COPY,
+  isLang,
+  type Lang,
+} from "@/lib/report-i18n";
 import { fmtDate, pct } from "@/lib/utils";
+import { PrintButton, ShareReportButton } from "@/components/report-actions";
 import {
   Avatar,
   Badge,
   Card,
-  CardHeader,
+  Delta,
   PageHeader,
   Progress,
 } from "@/components/ui";
 
 export const metadata = { title: "Weekly report" };
 
-export default async function ParentReportPage() {
+export default async function ParentReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string }>;
+}) {
   const session = await requireSession(["PARENT"]);
+  const { lang: rawLang } = await searchParams;
+  const lang: Lang = isLang(rawLang) ? rawLang : "en";
+  const t = REPORT_COPY[lang];
+
   const links = await db.parentLink.findMany({
     where: { parentId: session.sub },
     include: {
@@ -44,8 +61,13 @@ export default async function ParentReportPage() {
   if (!links.length) notFound();
 
   const active = links[0].student;
-  const report = await weeklyReport(active.id);
+  const report = await weeklyReport(active.id, lang);
   if (!report) notFound();
+
+  await logAudit("VIEW_WEEKLY_REPORT", {
+    subject: active.user.name,
+    detail: `Language: ${lang.toUpperCase()} · period ${report.periodLabel}`,
+  });
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in">
@@ -53,12 +75,33 @@ export default async function ParentReportPage() {
         href="/parent"
         className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-bold text-ink-500 transition hover:text-brand-600"
       >
-        <ArrowLeft size={14} /> Back to overview
+        <ArrowLeft size={14} /> {t.back}
       </Link>
 
       <PageHeader
-        title="Weekly progress report"
-        sub="Generated automatically every week from attendance, assessments and submitted work."
+        title={t.title}
+        sub={t.sub}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex overflow-hidden rounded-xl border border-line bg-card">
+              {LANGS.map((l) => (
+                <Link
+                  key={l.code}
+                  href={`/parent/report?lang=${l.code}`}
+                  className={`px-3 py-2 text-[12.5px] font-bold transition ${
+                    l.code === lang
+                      ? "bg-brand-600 text-white"
+                      : "text-ink-500 hover:bg-ink-100 hover:text-ink-800"
+                  }`}
+                  title={l.label}
+                >
+                  {l.native}
+                </Link>
+              ))}
+            </div>
+            <PrintButton label={t.print} />
+          </div>
+        }
       />
 
       <Card className="overflow-hidden">
@@ -75,10 +118,22 @@ export default async function ParentReportPage() {
           </div>
           <div className="ml-auto text-right">
             <p className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
-              Reporting period
+              {t.period}
             </p>
             <p className="font-display text-[15px] font-extrabold text-ink-900">
               {report.periodLabel}
+            </p>
+            <p className="mt-0.5">
+              {report.delta !== null ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 ring-1 ring-line">
+                  <Delta value={report.delta} />
+                  <span className="text-[11.5px] font-bold text-ink-500">{t.delta}</span>
+                </span>
+              ) : (
+                <span className="text-[11.5px] font-semibold text-ink-400">
+                  {t.noDelta}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -87,7 +142,7 @@ export default async function ParentReportPage() {
           <div className="flex items-center gap-2">
             <Mail size={15} className="text-brand-600" />
             <h3 className="font-display text-[14.5px] font-extrabold text-ink-900">
-              Summary for parents
+              {t.summaryTitle}
             </h3>
           </div>
           <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
@@ -98,7 +153,7 @@ export default async function ParentReportPage() {
         <div className="grid border-b border-line sm:grid-cols-3">
           <div className="border-b border-line p-5 sm:border-b-0 sm:border-r">
             <p className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
-              Overall average
+              {t.overall}
             </p>
             <p className="mt-1 font-display text-3xl font-extrabold text-ink-900">
               {pct(report.overall)}
@@ -107,24 +162,24 @@ export default async function ParentReportPage() {
           </div>
           <div className="border-b border-line p-5 sm:border-b-0 sm:border-r">
             <p className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
-              Attendance this week
+              {t.attendanceWeek}
             </p>
             <p className="mt-1 font-display text-3xl font-extrabold text-ink-900">
               {report.attendance.present}/{report.attendance.total}
             </p>
             <p className="mt-1 text-[13px] font-bold text-ink-500">
-              {pct(report.attendance.pct)} present
+              {pct(report.attendance.pct)} {t.present}
             </p>
           </div>
           <div className="p-5">
             <p className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
-              Assessments this week
+              {t.assessmentsWeek}
             </p>
             <p className="mt-1 font-display text-3xl font-extrabold text-ink-900">
               {report.assessments.length}
             </p>
             <p className="mt-1 text-[13px] font-bold text-ink-500">
-              {report.homework.length} homework items due
+              {report.homework.length} {t.homeworkDue}
             </p>
           </div>
         </div>
@@ -132,7 +187,7 @@ export default async function ParentReportPage() {
         <div className="grid border-b border-line lg:grid-cols-2">
           <div className="border-b border-line p-6 lg:border-b-0 lg:border-r">
             <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
-              <CheckCircle2 size={16} className="text-mint-600" /> Highlights
+              <CheckCircle2 size={16} className="text-mint-600" /> {t.highlights}
             </h3>
             <ul className="mt-3 space-y-2.5">
               {report.highlights.map((h, i) => (
@@ -142,13 +197,13 @@ export default async function ParentReportPage() {
                 </li>
               ))}
               {!report.highlights.length && (
-                <li className="text-[13px] text-ink-500">A steady week overall.</li>
+                <li className="text-[13px] text-ink-500">{t.emptyHighlights}</li>
               )}
             </ul>
           </div>
           <div className="p-6">
             <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
-              <AlertTriangle size={16} className="text-accent-500" /> Needs attention
+              <AlertTriangle size={16} className="text-accent-500" /> {t.concerns}
             </h3>
             <ul className="mt-3 space-y-2.5">
               {report.concerns.map((c, i) => (
@@ -158,9 +213,7 @@ export default async function ParentReportPage() {
                 </li>
               ))}
               {!report.concerns.length && (
-                <li className="text-[13px] text-ink-500">
-                  No concerns this week — keep supporting the routine.
-                </li>
+                <li className="text-[13px] text-ink-500">{t.emptyConcerns}</li>
               )}
             </ul>
           </div>
@@ -168,7 +221,7 @@ export default async function ParentReportPage() {
 
         <div className="border-b border-line p-6">
           <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
-            <CalendarDays size={16} className="text-brand-600" /> This week&apos;s assessments
+            <CalendarDays size={16} className="text-brand-600" /> {t.assessmentsTable}
           </h3>
           {report.assessments.length ? (
             <table className="mt-3 w-full text-left text-sm">
@@ -205,16 +258,14 @@ export default async function ParentReportPage() {
               </tbody>
             </table>
           ) : (
-            <p className="mt-2 text-[13px] text-ink-500">
-              No graded assessments this week.
-            </p>
+            <p className="mt-2 text-[13px] text-ink-500">{t.noAssessments}</p>
           )}
         </div>
 
         {report.attendance.absents.length > 0 && (
           <div className="border-b border-line p-6">
             <h3 className="font-display text-[14.5px] font-extrabold text-ink-900">
-              Absences this week
+              {t.absences}
             </h3>
             <div className="mt-2 flex flex-wrap gap-2">
               {report.attendance.absents.map((d) => (
@@ -226,7 +277,32 @@ export default async function ParentReportPage() {
 
         <div className="border-b border-line p-6">
           <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
-            <Target size={16} className="text-violet-600" /> Suggested focus for next week
+            <ListChecks size={16} className="text-mint-600" /> {t.plans}
+          </h3>
+          <div className="mt-3 space-y-3">
+            {report.plans.map((p, i) => (
+              <div key={i} className="rounded-xl border border-mint-200 bg-mint-500/5 p-4">
+                <p className="font-display text-[14px] font-extrabold text-ink-900">
+                  {p.title}
+                </p>
+                <ol className="mt-1.5 space-y-1">
+                  {p.plan.split("\n").filter(Boolean).map((line, j) => (
+                    <li key={j} className="text-[13.5px] leading-relaxed text-ink-700">
+                      {line}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+            {!report.plans.length && (
+              <p className="text-[13px] text-ink-500">{t.noPlans}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="border-b border-line p-6">
+          <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+            <Target size={16} className="text-violet-600" /> {t.focus}
           </h3>
           <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
             {report.focusNext}
@@ -234,9 +310,9 @@ export default async function ParentReportPage() {
         </div>
 
         {active.guidance.length > 0 && (
-          <div className="p-6">
+          <div className="border-b border-line p-6">
             <h3 className="font-display text-[14.5px] font-extrabold text-ink-900">
-              Teacher &amp; counselor notes
+              {t.notes}
             </h3>
             <ul className="mt-3 space-y-3">
               {active.guidance.map((g) => (
@@ -256,10 +332,15 @@ export default async function ParentReportPage() {
             </ul>
           </div>
         )}
+
+        <div className="flex flex-wrap items-center justify-between gap-4 p-6">
+          <p className="text-[12.5px] text-ink-400">{t.footer}</p>
+          <ShareReportButton label={t.share} />
+        </div>
       </Card>
 
-      <p className="mt-4 text-center text-[12.5px] text-ink-400">
-        Sent automatically to parents every Monday · Powered by EduPulse analysis
+      <p className="mt-4 text-center text-[12px] text-ink-400">
+        Privacy-first: every view and share is recorded in the school&apos;s audit log.
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-# EduPulse
+# Vidyora
 
 AI-powered student progress monitoring platform for schools — continuous assessment loop: **Collect → Track → Analyze → Recommend → Assess → Re-analyze → Improve**.
 
@@ -32,7 +32,7 @@ Built with Next.js 16 (App Router), Prisma + SQLite, TypeScript, Tailwind CSS v4
 git clone https://github.com/reyansh14coder-ux/edupulse.git
 
 # 2. Go into the project folder
-cd edupulse
+cd Vidyora
 
 # 3. Install all dependencies
 npm install
@@ -52,7 +52,7 @@ npm run dev
 1. Click the green **<> Code** button on the repo page
 2. Click **Download ZIP**
 3. Extract the ZIP anywhere on your computer
-4. Open terminal/cmd in the extracted `edupulse` folder
+4. Open terminal/cmd in the extracted `Vidyora` folder
 5. Run the same commands as Option A, steps 3–6:
 
 ```bash
@@ -70,7 +70,7 @@ After `npm run dev`, open:
 http://localhost:3000
 ```
 
-You should see the EduPulse landing page. Click **"Try the demo"** or go to `/login`.
+You should see the Vidyora landing page. Click **"Try the demo"** or go to `/login`.
 
 ---
 
@@ -80,10 +80,10 @@ Password for all accounts: **`demo123`**
 
 | Role    | Email                  | Notes                          |
 |---------|------------------------|--------------------------------|
-| Admin   | admin@edupulse.in      | Principal — full school view   |
-| Teacher | teacher@edupulse.in    | Anjali Sharma — Mathematics    |
-| Parent  | parent@edupulse.in     | Rakesh Patel — weekly reports  |
-| Student | student@edupulse.in    | Aarav Patel — Class 6A         |
+| Admin   | admin@Vidyora.in      | Principal — full school view   |
+| Teacher | teacher@Vidyora.in    | Anjali Sharma — Mathematics    |
+| Parent  | parent@Vidyora.in     | Rakesh Patel — weekly reports  |
+| Student | student@Vidyora.in    | Aarav Patel — Class 6A         |
 
 ---
 
@@ -103,7 +103,7 @@ Password for all accounts: **`demo123`**
 ## Project Structure
 
 ```
-edupulse/
+Vidyora/
 ├── prisma/
 │   ├── schema.prisma      # Database models
 │   ├── seed.ts            # Demo data seeder

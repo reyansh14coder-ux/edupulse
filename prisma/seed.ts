@@ -44,7 +44,7 @@ async function main() {
   const admin = await db.user.create({
     data: {
       name: "Dr. Kavita Iyer",
-      email: "admin@edupulse.in",
+      email: "admin@Vidyora.in",
       password: pw,
       role: "ADMIN",
       title: "Principal",
@@ -53,7 +53,7 @@ async function main() {
   });
 
   const teacherDefs = [
-    { name: "Anjali Sharma", email: "teacher@edupulse.in", subject: "Mathematics", title: "PGT Mathematics" },
+    { name: "Anjali Sharma", email: "teacher@Vidyora.in", subject: "Mathematics", title: "PGT Mathematics" },
     { name: "Rajesh Kumar", email: "rajesh.kumar@vidyaniketan.edu.in", subject: "Science", title: "PGT Science" },
     { name: "Priya Verma", email: "priya.verma@vidyaniketan.edu.in", subject: "English", title: "TGT English" },
     { name: "Suresh Iyer", email: "suresh.iyer@vidyaniketan.edu.in", subject: "Social Science", title: "TGT Social Science" },
@@ -180,8 +180,8 @@ async function main() {
       const first = name.split(" ")[0].toLowerCase();
       const last = name.split(" ")[1].toLowerCase();
       const email = isDemo
-        ? "student@edupulse.in"
-        : `${first}.${last}@students.edupulse.in`;
+        ? "student@Vidyora.in"
+        : `${first}.${last}@students.Vidyora.in`;
       const u = await db.user.create({
         data: {
           name,
@@ -203,10 +203,10 @@ async function main() {
       const parentName = isDemo ? "Rakesh Patel" : parentNames[pIdx];
       pIdx++;
       const parentEmail = isDemo
-        ? "parent@edupulse.in"
+        ? "parent@Vidyora.in"
         : `${parentName.split(" ")[0].toLowerCase()}.${parentName
             .split(" ")[1]
-            .toLowerCase()}@families.edupulse.in`;
+            .toLowerCase()}@families.Vidyora.in`;
       const parent = await db.user.create({
         data: {
           name: parentName,
@@ -223,7 +223,7 @@ async function main() {
         const mother = await db.user.create({
           data: {
             name: "Sunita Patel",
-            email: "sunita.patel@families.edupulse.in",
+            email: "sunita.patel@families.Vidyora.in",
             password: pw,
             role: "PARENT",
           },

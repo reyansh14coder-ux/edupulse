@@ -96,6 +96,27 @@ export async function generatePracticeQuizAction() {
   redirect(`/student/quizzes/${quiz.id}`);
 }
 
+export async function practiceForChapterAction(formData: FormData) {
+  const session = await requireSession(["STUDENT"]);
+  const student = await db.student.findUnique({
+    where: { userId: session.sub },
+    select: { id: true, classId: true },
+  });
+  if (!student) throw new Error("Student profile not found.");
+
+  const subject = String(formData.get("subject") ?? "");
+  const chapter = String(formData.get("chapter") ?? "");
+  if (!subject || !chapter) throw new Error("Subject and chapter are required.");
+
+  const quiz = await createClassQuiz({
+    classId: student.classId,
+    subject,
+    chapter,
+  });
+  revalidatePath("/student/quizzes");
+  redirect(`/student/quizzes/${quiz.id}`);
+}
+
 export async function createClassQuizAction(formData: FormData) {
   const session = await requireSession(["TEACHER", "ADMIN"]);
   const classId = String(formData.get("classId") ?? "");

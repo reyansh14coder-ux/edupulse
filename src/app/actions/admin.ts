@@ -94,7 +94,7 @@ export async function createStudentAction(formData: FormData) {
 
   const slug = name.toLowerCase().replace(/[^a-z ]/g, "").split(" ").join(".");
   let email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!email) email = `${slug}@students.edupulse.in`;
+  if (!email) email = `${slug}@students.Vidyora.in`;
   if (await db.user.findUnique({ where: { email } }))
     throw new Error("A user with this email already exists.");
 
@@ -115,7 +115,7 @@ export async function createStudentAction(formData: FormData) {
   if (parentName) {
     const pEmail =
       parentEmail ||
-      `${parentName.toLowerCase().replace(/[^a-z ]/g, "").split(" ").join(".")}@families.edupulse.in`;
+      `${parentName.toLowerCase().replace(/[^a-z ]/g, "").split(" ").join(".")}@families.Vidyora.in`;
     let parent = await db.user.findUnique({ where: { email: pEmail } });
     if (!parent) {
       parent = await db.user.create({

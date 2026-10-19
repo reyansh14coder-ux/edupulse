@@ -155,9 +155,74 @@ export async function createPracticeQuizForStudent(studentId: string) {
   const weakest =
     pulse.subjects[pulse.subjects.length - 1]?.subject ?? pulse.subjects[0]?.subject;
   if (!weakest) throw new Error("No subject data available yet.");
+
+  const { learningGaps } = await import("@/lib/gaps");
+  const gaps = await learningGaps(studentId);
+  const weakChapter =
+    gaps.weak.find((c) => c.subject === weakest)?.chapter ??
+    gaps.weakest?.chapter ??
+    null;
+
   return createClassQuiz({
     classId: pulse.student.classId,
     subject: weakest,
-    chapter: null,
+    chapter: weakChapter,
   });
+}
+
+export function draftPlan(rec: {
+  kind: string;
+  title: string;
+  body: string;
+  context?: string | null;
+}): string {
+  const focus = rec.context
+    ? `Focus topic: ${rec.context}.`
+    : "Focus on the areas mentioned below.";
+  switch (rec.kind) {
+    case "SUBJECT_SUPPORT":
+      return [
+        `1. Revise ${rec.context ?? "the weakest subject"} basics for 20 minutes daily this week.`,
+        "2. Solve 10 textbook questions from the flagged chapter and mark doubts.",
+        "3. Attempt the AI practice quiz for this chapter and score above 70%.",
+        "4. Ask one doubt in class or from the teacher before Friday.",
+        focus,
+      ].join("\n");
+    case "DECLINE":
+      return [
+        "1. Compare the last two test papers — list the 3 questions marks were lost on.",
+        "2. Redo those questions without looking at solutions.",
+        "3. Take one AI practice quiz every alternate day on the declining subject.",
+        "4. Review progress with teacher in the next parent-teacher meeting.",
+        focus,
+      ].join("\n");
+    case "ATTENDANCE":
+      return [
+        "1. Maintain a daily sleep and study timetable — target 8 hours of sleep.",
+        "2. Keep all pending work cleared the same day as absence.",
+        "3. Aim for full attendance for the next 2 weeks and track it here.",
+        focus,
+      ].join("\n");
+    case "HOMEWORK":
+      return [
+        "1. Clear all pending homework within the next 3 days.",
+        "2. Set a daily 4:00–5:00 PM homework slot at home.",
+        "3. Get submissions checked by the teacher the same day.",
+        focus,
+      ].join("\n");
+    case "QUIZ_SUGGESTION":
+      return [
+        "1. Attempt the recommended AI practice quiz this week.",
+        "2. Revise every question answered incorrectly.",
+        "3. Re-attempt after 3 days — target 80% or better.",
+        focus,
+      ].join("\n");
+    default:
+      return [
+        "1. Continue the current revision routine across all subjects.",
+        "2. Attempt one AI practice quiz every week to stay sharp.",
+        "3. Keep homework and attendance consistent.",
+        focus,
+      ].join("\n");
+  }
 }

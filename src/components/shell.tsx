@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
+  BarChart3,
   BookOpen,
   CalendarCheck,
   ClipboardList,
@@ -12,6 +13,9 @@ import {
   LogOut,
   LineChart,
   Newspaper,
+  ShieldCheck,
+  Sparkles,
+  Target,
   Users,
   GraduationCap,
 } from "lucide-react";
@@ -27,16 +31,20 @@ const NAV: Record<Role, { href: string; label: string; icon: ReactNode }[]> = {
     { href: "/admin/students", label: "Students", icon: <GraduationCap size={18} /> },
     { href: "/admin/teachers", label: "Teachers", icon: <Users size={18} /> },
     { href: "/counseling", label: "Counseling", icon: <HeartHandshake size={18} /> },
+    { href: "/admin/audit", label: "Audit log", icon: <ShieldCheck size={18} /> },
   ],
   TEACHER: [
     { href: "/teacher", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/teacher/attendance", label: "Attendance", icon: <CalendarCheck size={18} /> },
     { href: "/teacher/marks", label: "Marks", icon: <ClipboardList size={18} /> },
     { href: "/teacher/homework", label: "Homework", icon: <BookOpen size={18} /> },
+    { href: "/teacher/insights", label: "Class insights", icon: <BarChart3 size={18} /> },
     { href: "/counseling", label: "Counseling", icon: <HeartHandshake size={18} /> },
   ],
   STUDENT: [
     { href: "/student", label: "Home", icon: <LayoutDashboard size={18} /> },
+    { href: "/student/plan", label: "My Plan", icon: <Target size={18} /> },
+    { href: "/student/quizzes", label: "Quizzes", icon: <Sparkles size={18} /> },
     { href: "/student/homework", label: "Homework", icon: <BookOpen size={18} /> },
   ],
   PARENT: [

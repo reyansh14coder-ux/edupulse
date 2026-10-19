@@ -98,14 +98,14 @@ export default function Home() {
         <div className="absolute -top-28 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-500/25 via-violet-500/20 to-accent-500/20 blur-3xl" />
         <div className="relative mx-auto max-w-6xl px-5 pb-20 pt-16 text-center sm:pt-24">
           <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand-200 bg-card px-4 py-1.5 text-[12.5px] font-bold text-brand-700">
-            <Sparkles size={13} /> EduPulse MVP · continuous student support
+            <Sparkles size={13} /> Vidyora MVP · continuous student support
           </span>
           <h1 className="animate-fade-up mx-auto mt-6 max-w-3xl font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-ink-950 sm:text-6xl">
             Every student&apos;s progress,{" "}
             <span className="gradient-text">monitored continuously</span> — not once a term.
           </h1>
           <p className="animate-fade-up mx-auto mt-5 max-w-2xl text-[16.5px] leading-relaxed text-ink-600">
-            EduPulse brings a school&apos;s student data — marks, attendance, homework and
+            Vidyora brings a school&apos;s student data — marks, attendance, homework and
             syllabus — into one system, then loops it through{" "}
             <strong className="font-bold text-ink-900">analyze → recommend → assess →
             improve</strong> so teachers, students and parents always know the next step.
@@ -138,7 +138,7 @@ export default function Home() {
       <section id="loop" className="mx-auto max-w-6xl px-5 py-16">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-[12.5px] font-bold uppercase tracking-widest text-brand-600">
-            The EduPulse loop
+            The Vidyora loop
           </p>
           <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-ink-950 sm:text-4xl">
             Seven steps that never stop running
@@ -222,7 +222,7 @@ export default function Home() {
               Recommendations that know the syllabus
             </h2>
             <p className="mt-4 text-[15.5px] leading-relaxed text-ink-600">
-              EduPulse reads marks, attendance trends, homework discipline and chapter
+              Vidyora reads marks, attendance trends, homework discipline and chapter
               coverage — then writes specific, actionable guidance for each student. Take a
               quiz, and your result immediately re-runs the analysis.
             </p>
@@ -299,7 +299,7 @@ export default function Home() {
         <div className="card relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-violet-600 px-8 py-12 text-center text-white">
           <div className="grid-pattern absolute inset-0 opacity-20" />
           <h2 className="relative font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-            See EduPulse in action
+            See Vidyora in action
           </h2>
           <p className="relative mx-auto mt-3 max-w-xl text-[15.5px] leading-relaxed text-white/85">
             A fully seeded demo school — Vidya Niketan Public School, CBSE — with students,
@@ -325,7 +325,7 @@ export default function Home() {
           <div className="flex items-center gap-2.5">
             <Logo className="h-7 w-7" />
             <span className="text-[13px] font-bold text-ink-500">
-              EduPulse — continuous student support
+              Vidyora — continuous student support
             </span>
           </div>
           <p className="text-[12.5px] text-ink-400">

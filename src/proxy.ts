@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const SESSION_COOKIE = "edupulse_session";
+const SESSION_COOKIE = "Vidyora_session";
 
 const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "edupulse-dev-secret-change-in-production"
+  process.env.SESSION_SECRET || "Vidyora-dev-secret-change-in-production"
 );
 
 function homeFor(role: string) {
@@ -77,7 +77,9 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.set("Cache-Control", "no-store, must-revalidate");
+  return response;
 }
 
 export const config = {

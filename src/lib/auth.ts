@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 
-export const SESSION_COOKIE = "edupulse_session";
+export const SESSION_COOKIE = "Vidyora_session";
 
 export type Role = "ADMIN" | "TEACHER" | "PARENT" | "STUDENT";
 
@@ -15,7 +15,7 @@ export type Session = {
 };
 
 const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "edupulse-dev-secret-change-in-production"
+  process.env.SESSION_SECRET || "Vidyora-dev-secret-change-in-production"
 );
 
 export function homeFor(role: Role) {

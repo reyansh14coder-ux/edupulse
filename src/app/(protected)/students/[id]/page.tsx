@@ -11,7 +11,9 @@ import {
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { studentPulse } from "@/lib/insights";
-import { ensureRecommendations } from "@/lib/ai";
+import { ensureRecommendations, draftPlan } from "@/lib/ai";
+import { logAudit } from "@/lib/audit";
+import { planFormAction } from "@/app/actions/plan";
 import { fmtDate, pct } from "@/lib/utils";
 import { AttendanceDonut, SubjectBars, TrendArea } from "@/components/charts";
 import { refreshRecommendationsAction } from "@/app/actions/recommend";
@@ -24,6 +26,7 @@ import {
   PageHeader,
   ScoreRing,
   StatCard,
+  inputCls,
 } from "@/components/ui";
 
 export const metadata = { title: "Student profile" };
@@ -106,6 +109,16 @@ export default async function StudentProfilePage({
       }),
     ]);
   if (!pulse) notFound();
+
+  if (session.role !== "STUDENT") {
+    await logAudit("VIEW_PROGRESS", {
+      subject: student.user.name,
+      detail: `${session.role} opened the student progress profile`,
+    });
+  }
+
+  const canPlan =
+    session.role === "TEACHER" || session.role === "ADMIN";
 
   const backHref =
     session.role === "ADMIN"
@@ -228,6 +241,81 @@ export default async function StudentProfilePage({
                 {r.title}
               </p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-600">{r.body}</p>
+
+              {!canPlan && r.plan && r.planStatus === "APPROVED" && (
+                <div className="mt-3 rounded-xl border border-mint-200 bg-mint-500/5 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-mint-600">
+                    Next-step plan · approved
+                  </p>
+                  {r.plan.split("\n").filter(Boolean).map((line, i) => (
+                    <p key={i} className="mt-1 text-[13px] text-ink-700">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {canPlan && (
+                <form
+                  action={planFormAction.bind(null, r.id)}
+                  className="mt-3 border-t border-line pt-3"
+                >
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
+                      Next-step plan
+                    </span>
+                    <Badge
+                      tone={
+                        r.planStatus === "APPROVED"
+                          ? "success"
+                          : r.planStatus === "PROPOSED"
+                            ? "info"
+                            : "neutral"
+                      }
+                    >
+                      {r.planStatus === "APPROVED"
+                        ? "shared with student"
+                        : r.planStatus === "PROPOSED"
+                          ? "draft saved"
+                          : "not started"}
+                    </Badge>
+                  </div>
+                  <textarea
+                    name="plan"
+                    rows={5}
+                    defaultValue={r.plan ?? draftPlan(r)}
+                    className={`${inputCls} font-mono text-[12.5px] leading-relaxed`}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      name="intent"
+                      value="save"
+                      className="rounded-xl border border-line bg-card px-3 py-1.5 text-[12.5px] font-bold text-ink-600 transition hover:border-brand-300 hover:text-brand-700"
+                    >
+                      Save draft
+                    </button>
+                    <button
+                      type="submit"
+                      name="intent"
+                      value="approve"
+                      className="rounded-xl bg-mint-500 px-3 py-1.5 text-[12.5px] font-bold text-white transition hover:bg-mint-600"
+                    >
+                      Approve & share
+                    </button>
+                    {r.planStatus === "APPROVED" && (
+                      <button
+                        type="submit"
+                        name="intent"
+                        value="unshare"
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12.5px] font-bold text-rose-600 transition hover:bg-rose-100"
+                      >
+                        Stop sharing
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
             </div>
           ))}
         </div>

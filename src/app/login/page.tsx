@@ -22,25 +22,25 @@ import { cn } from "@/lib/utils";
 const DEMO = [
   {
     role: "Admin",
-    email: "admin@edupulse.in",
+    email: "admin@Vidyora.in",
     desc: "Principal · full school view",
     icon: <ShieldCheck size={16} />,
   },
   {
     role: "Teacher",
-    email: "teacher@edupulse.in",
+    email: "teacher@Vidyora.in",
     desc: "Anjali Sharma · Mathematics",
     icon: <GraduationCap size={16} />,
   },
   {
     role: "Parent",
-    email: "parent@edupulse.in",
+    email: "parent@Vidyora.in",
     desc: "Rakesh Patel · weekly reports",
     icon: <Newspaper size={16} />,
   },
   {
     role: "Student",
-    email: "student@edupulse.in",
+    email: "student@Vidyora.in",
     desc: "Aarav Patel · Class 6 A",
     icon: <BarChart3 size={16} />,
   },
@@ -63,8 +63,9 @@ export default function LoginPage() {
       const passInput = form.querySelector<HTMLInputElement>('[name="password"]');
       if (emailInput) emailInput.value = email;
       if (passInput) passInput.value = "demo123";
+      setTimeout(() => form.requestSubmit(), 200);
     }
-    setTimeout(() => setFilling(null), 400);
+    setTimeout(() => setFilling(null), 600);
   };
 
   return (
@@ -75,7 +76,7 @@ export default function LoginPage() {
         <div className="relative flex h-full flex-col justify-between p-12">
           <Link href="/" className="flex items-center gap-2.5">
             <Logo />
-            <span className="font-display text-lg font-extrabold text-white">EduPulse</span>
+            <span className="font-display text-lg font-extrabold text-white">Vidyora</span>
           </Link>
 
           <div className="max-w-md animate-fade-up">
@@ -172,7 +173,10 @@ export default function LoginPage() {
             </div>
 
             {state?.error && (
-              <p className="rounded-xl bg-rose-50 px-3.5 py-2.5 text-[13px] font-semibold text-rose-600 ring-1 ring-rose-600/15">
+              <p
+                role="alert"
+                className="rounded-xl bg-rose-50 px-3.5 py-3 text-[13.5px] font-bold text-rose-600 ring-1 ring-rose-600/20"
+              >
                 {state.error}
               </p>
             )}
@@ -193,7 +197,7 @@ export default function LoginPage() {
           <div className="my-6 flex items-center gap-3">
             <span className="h-px flex-1 bg-line" />
             <span className="text-[11.5px] font-bold uppercase tracking-wider text-ink-400">
-              Quick demo login
+              One-tap demo login
             </span>
             <span className="h-px flex-1 bg-line" />
           </div>

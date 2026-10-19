@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { isoDate } from "@/lib/utils";
+import { REPORT_COPY, localeOf, type Lang } from "@/lib/report-i18n";
 
 export type SubjectStat = {
   subject: string;
@@ -479,9 +480,17 @@ export type WeeklyReport = {
   focusNext: string;
   overall: number;
   summary: string;
+  delta: number | null;
+  weekAvg: number | null;
+  plans: { title: string; plan: string }[];
 };
 
-export async function weeklyReport(studentId: string): Promise<WeeklyReport | null> {
+export async function weeklyReport(
+  studentId: string,
+  lang: Lang = "en"
+): Promise<WeeklyReport | null> {
+  const t = REPORT_COPY[lang];
+  const locale = localeOf(lang);
   const student = await db.student.findUnique({
     where: { id: studentId },
     include: {
@@ -510,9 +519,13 @@ export async function weeklyReport(studentId: string): Promise<WeeklyReport | nu
   const attPct = weekAttendance.length ? (present / weekAttendance.length) * 100 : 100;
   const absents = weekAttendance
     .filter((a) => a.status === "ABSENT")
-    .map((a) =>
-      a.date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })
-    );
+    .map((a) => a.date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "short" }));
+
+  const prevMonday = new Date(monday);
+  prevMonday.setDate(monday.getDate() - 7);
+  const prevScores = student.scores.filter(
+    (s) => s.assessment.date >= prevMonday && s.assessment.date < monday
+  );
 
   const weekAssessments = student.scores
     .filter((s) => inWeek(s.assessment.date))
@@ -540,20 +553,18 @@ export async function weeklyReport(studentId: string): Promise<WeeklyReport | nu
   const highlights: string[] = [];
   const concerns: string[] = [];
   const best = [...scored].sort((a, b) => b.pct - a.pct)[0];
-  if (best) highlights.push(`Scored ${Math.round(best.pct)}% in ${best.subject} (${best.title}).`);
-  if (attPct >= 95) highlights.push("Perfect or near-perfect attendance this week.");
+  if (best) highlights.push(t.hBest(Math.round(best.pct), best.subject, best.title));
+  if (attPct >= 95) highlights.push(t.hPerfect);
   if (present === weekAttendance.length && weekAttendance.length > 0)
-    highlights.push("Present all week — consistent routine.");
-  if (!scored.length)
-    highlights.push("No graded assessments this week — steady practice continues.");
+    highlights.push(t.hPresentAll);
+  if (!scored.length) highlights.push(t.hSteady);
 
   const worst = [...scored].sort((a, b) => a.pct - b.pct)[0];
   if (worst && worst.pct < 50)
-    concerns.push(`${worst.subject} (${worst.title}) needs revision — ${Math.round(worst.pct)}%.`);
-  if (absents.length >= 2) concerns.push(`Absent on ${absents.length} days this week.`);
+    concerns.push(t.cWorst(worst.subject, worst.title, Math.round(worst.pct)));
+  if (absents.length >= 2) concerns.push(t.cAbsent(absents.length));
   const pending = homeworkDue.filter((h) => h.status === "PENDING");
-  if (pending.length)
-    concerns.push(`${pending.length} homework item(s) still pending submission.`);
+  if (pending.length) concerns.push(t.cPending(pending.length));
 
   const bySubject = subjectStats(
     student.scores.map((s) => ({
@@ -565,18 +576,41 @@ export async function weeklyReport(studentId: string): Promise<WeeklyReport | nu
   );
   const weakest = bySubject[bySubject.length - 1];
   const focusNext = weakest
-    ? `Revise ${weakest.subject} fundamentals (currently averaging ${Math.round(weakest.avg)}%) and complete pending homework before the next unit test.`
-    : "Keep up the balanced routine across all subjects.";
+    ? t.focusLine(weakest.subject, Math.round(weakest.avg))
+    : t.focusNone;
 
-  const summary =
-    `${student.user.name} is currently averaging ${Math.round(overall)}% across all assessments ` +
-    `with ${Math.round(attPct)}% attendance this week. ` +
-    (concerns.length
-      ? `${concerns.length} area(s) need attention — see concerns below.`
-      : "Performance and participation are both healthy this week.");
+  const healthy = lang === "hi"
+    ? "प्रदर्शन और भागीदारी दोनों इस हफ़्ते स्वस्थ हैं।"
+    : lang === "mr"
+      ? "प्रदर्शन व सहभागिता दोन्ही या आठवड्यात निरोगी आहेत."
+      : "Performance and participation are both healthy this week.";
+  const summary = t.summary(
+    student.user.name,
+    Math.round(overall),
+    Math.round(attPct),
+    concerns.length,
+    healthy
+  );
+
+  const weekPcts = weekAssessments.map((s) => pctOf(s.marks, s.assessment.maxMarks));
+  const prevPcts = prevScores.map((s) => pctOf(s.marks, s.assessment.maxMarks));
+  const weekAvg = weekPcts.length
+    ? weekPcts.reduce((s, v) => s + v, 0) / weekPcts.length
+    : null;
+  const prevAvg = prevPcts.length
+    ? prevPcts.reduce((s, v) => s + v, 0) / prevPcts.length
+    : null;
+  const delta = weekAvg !== null && prevAvg !== null ? weekAvg - prevAvg : null;
+
+  const plans = await db.recommendation.findMany({
+    where: { studentId, planStatus: "APPROVED", plan: { not: null } },
+    select: { title: true, plan: true },
+    orderBy: { updatedAt: "desc" },
+    take: 4,
+  });
 
   return {
-    periodLabel: `${monday.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${new Date(weekEnd.getTime() - 864e5).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
+    periodLabel: `${monday.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${new Date(weekEnd.getTime() - 864e5).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}`,
     attendance: { present, total: weekAttendance.length, pct: attPct, absents },
     assessments: scored,
     homework: homeworkDue.map((h) => ({
@@ -590,5 +624,280 @@ export async function weeklyReport(studentId: string): Promise<WeeklyReport | nu
     focusNext,
     overall,
     summary,
+    delta,
+    weekAvg,
+    plans: plans.map((p) => ({ title: p.title, plan: p.plan ?? "" })),
+  };
+}
+
+export type TimelineEvent = {
+  id: string;
+  date: Date;
+  kind: "TEST" | "QUIZ" | "HOMEWORK" | "REC" | "GUIDANCE" | "COUNSELING" | "ABSENT" | "GOAL";
+  title: string;
+  meta: string;
+  tone: "success" | "danger" | "warning" | "brand" | "neutral";
+};
+
+export async function progressTimeline(studentId: string, take = 16) {
+  const [scores, quizzes, subs, recs, guidance, sessions, goals, absents] =
+    await Promise.all([
+      db.score.findMany({
+        where: { studentId },
+        include: { assessment: { select: { title: true, subject: true, date: true, maxMarks: true } } },
+        take: 12,
+      }),
+      db.quizAttempt.findMany({
+        where: { studentId },
+        include: { quiz: { select: { title: true, subject: true } } },
+        take: 8,
+      }),
+      db.homeworkSubmission.findMany({
+        where: { studentId, status: { in: ["SUBMITTED", "LATE", "ON_TIME"] } },
+        include: { homework: { select: { title: true, subject: true, dueDate: true } } },
+        take: 8,
+      }),
+      db.recommendation.findMany({
+        where: { studentId },
+        select: { id: true, title: true, kind: true, createdAt: true },
+        take: 6,
+      }),
+      db.guidanceNote.findMany({
+        where: { studentId },
+        select: { id: true, title: true, category: true, createdAt: true },
+        take: 5,
+      }),
+      db.counselingSession.findMany({
+        where: { studentId },
+        select: { id: true, scheduledFor: true, status: true },
+        take: 5,
+      }),
+      db.studentGoal.findMany({
+        where: { studentId, status: "DONE" },
+        select: { id: true, title: true, updatedAt: true },
+        take: 5,
+      }),
+      db.attendance.findMany({
+        where: { studentId, status: "ABSENT" },
+        select: { id: true, date: true },
+        take: 6,
+      }),
+    ]);
+
+  const events: TimelineEvent[] = [];
+
+  for (const s of scores) {
+    const p = pctOf(s.marks, s.assessment.maxMarks);
+    events.push({
+      id: "t" + s.id,
+      date: s.assessment.date,
+      kind: "TEST",
+      title: `${s.assessment.subject} test � ${s.marks}/${s.assessment.maxMarks}`,
+      meta: s.assessment.title,
+      tone: p >= 75 ? "success" : p >= 50 ? "warning" : "danger",
+    });
+  }
+  for (const a of quizzes) {
+    const p = (a.score / a.total) * 100;
+    events.push({
+      id: "q" + a.id,
+      date: a.createdAt,
+      kind: "QUIZ",
+      title: `Quiz � ${a.score}/${a.total}`,
+      meta: `${a.quiz.subject} � ${a.quiz.title}`,
+      tone: p >= 75 ? "success" : p >= 50 ? "warning" : "danger",
+    });
+  }
+  for (const s of subs) {
+    events.push({
+      id: "h" + s.id,
+      date: s.submittedOn ?? s.homework.dueDate,
+      kind: "HOMEWORK",
+      title: `Submitted � ${s.homework.title}`,
+      meta: `${s.homework.subject} � ${s.status.toLowerCase()}`,
+      tone: s.status === "LATE" ? "warning" : "success",
+    });
+  }
+  for (const r of recs) {
+    events.push({
+      id: "r" + r.id,
+      date: r.createdAt,
+      kind: "REC",
+      title: r.title,
+      meta: "AI recommendation generated",
+      tone: "brand",
+    });
+  }
+  for (const g of guidance) {
+    events.push({
+      id: "g" + g.id,
+      date: g.createdAt,
+      kind: "GUIDANCE",
+      title: g.title,
+      meta: `Guidance � ${g.category}`,
+      tone: "neutral",
+    });
+  }
+  for (const s of sessions) {
+    events.push({
+      id: "c" + s.id,
+      date: s.scheduledFor,
+      kind: "COUNSELING",
+      title: `Counseling session (${s.status.toLowerCase()})`,
+      meta: "Scheduled with counselor",
+      tone: "brand",
+    });
+  }
+  for (const g of goals) {
+    events.push({
+      id: "o" + g.id,
+      date: g.updatedAt,
+      kind: "GOAL",
+      title: `Goal completed � ${g.title}`,
+      meta: "Self-set learning goal",
+      tone: "success",
+    });
+  }
+  for (const a of absents) {
+    events.push({
+      id: "a" + a.id,
+      date: a.date,
+      kind: "ABSENT",
+      title: "Absent",
+      meta: "Attendance record",
+      tone: "danger",
+    });
+  }
+
+  return events.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, take);
+}
+
+export type ClassInsights = {
+  classId: string;
+  className: string;
+  section: string;
+  studentCount: number;
+  classAvg: number;
+  attendanceAvg: number;
+  subjectAvg: { subject: string; avg: number }[];
+  hardestChapters: { subject: string; chapter: string; pct: number; attempts: number }[];
+  riskRows: { id: string; name: string; att: number; avg: number }[];
+  movers: { id: string; name: string; delta: number }[];
+  quizCount: number;
+};
+
+export async function classInsights(classId: string): Promise<ClassInsights | null> {
+  const schoolClass = await db.schoolClass.findUnique({
+    where: { id: classId },
+    include: {
+      students: {
+        include: {
+          user: { select: { name: true } },
+          attendance: { select: { status: true } },
+          scores: {
+            include: {
+              assessment: { select: { date: true, maxMarks: true, subject: true } },
+            },
+          },
+        },
+      },
+      quizzes: { include: { attempts: true } },
+    },
+  });
+  if (!schoolClass) return null;
+
+  const students = schoolClass.students;
+  const now = Date.now();
+  const d30 = now - 30 * 864e5;
+
+  const subjectMap = new Map<string, { sum: number; n: number }>();
+  const riskRows: ClassInsights["riskRows"] = [];
+  const movers: { id: string; name: string; delta: number }[] = [];
+  let attSum = 0;
+  let avgSum = 0;
+
+  for (const st of students) {
+    const pcts = st.scores.map((s) => pctOf(s.marks, s.assessment.maxMarks));
+    const avg = pcts.length ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
+    avgSum += avg;
+
+    for (const s of st.scores) {
+      const key = s.assessment.subject;
+      const agg = subjectMap.get(key) ?? { sum: 0, n: 0 };
+      agg.sum += pctOf(s.marks, s.assessment.maxMarks);
+      agg.n += 1;
+      subjectMap.set(key, agg);
+    }
+
+    const attPct = st.attendance.length
+      ? (st.attendance.filter((a) => a.status !== "ABSENT").length / st.attendance.length) * 100
+      : 100;
+    attSum += attPct;
+    if (attPct < 75 && avg > 0)
+      riskRows.push({ id: st.id, name: st.user.name, att: Math.round(attPct), avg: Math.round(avg) });
+
+    const recent = st.scores.filter((s) => s.assessment.date.getTime() >= d30);
+    const older = st.scores.filter((s) => s.assessment.date.getTime() < d30);
+    if (recent.length && older.length) {
+      const rAvg = recent.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) / recent.length;
+      const oAvg = older.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) / older.length;
+      movers.push({ id: st.id, name: st.user.name, delta: Math.round(rAvg - oAvg) });
+    }
+  }
+
+  const chapterMap = new Map<string, { subject: string; chapter: string; correct: number; total: number }>();
+  let quizCount = 0;
+  for (const quiz of schoolClass.quizzes) {
+    for (const attempt of quiz.attempts) {
+      quizCount++;
+      let questions: { chapter?: string }[] = [];
+      let detail: { correct?: boolean }[] = [];
+      try {
+        questions = JSON.parse(quiz.questions);
+        detail = JSON.parse(attempt.detail);
+      } catch {
+        continue;
+      }
+      questions.forEach((q, i) => {
+        const chapter = q.chapter || "General";
+        const key = `${quiz.subject}::${chapter}`;
+        const agg =
+          chapterMap.get(key) ?? { subject: quiz.subject, chapter, correct: 0, total: 0 };
+        agg.total += 1;
+        if (detail[i]?.correct) agg.correct += 1;
+        chapterMap.set(key, agg);
+      });
+    }
+  }
+
+  const hardestChapters = [...chapterMap.values()]
+    .filter((c) => c.total >= 2)
+    .map((c) => ({
+      subject: c.subject,
+      chapter: c.chapter,
+      pct: Math.round((c.correct / c.total) * 100),
+      attempts: c.total,
+    }))
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 8);
+
+  const subjectAvg = [...subjectMap.entries()]
+    .map(([subject, a]) => ({ subject, avg: Math.round(a.sum / a.n) }))
+    .sort((a, b) => a.avg - b.avg);
+
+  return {
+    classId,
+    className: schoolClass.name,
+    section: schoolClass.section,
+    studentCount: students.length,
+    classAvg: students.length ? Math.round(avgSum / students.length) : 0,
+    attendanceAvg: students.length ? Math.round(attSum / students.length) : 0,
+    subjectAvg,
+    hardestChapters,
+    riskRows: riskRows.sort((a, b) => a.att - b.att).slice(0, 6),
+    movers: movers
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 6),
+    quizCount,
   };
 }

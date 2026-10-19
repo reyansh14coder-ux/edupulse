@@ -24,7 +24,7 @@ export function Logo({ className = "h-9 w-9" }: { className?: string }) {
 export function Wordmark() {
   return (
     <span className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
-      Edu<span className="gradient-text">Pulse</span>
+      Vidy<span className="gradient-text">ora</span>
     </span>
   );
 }

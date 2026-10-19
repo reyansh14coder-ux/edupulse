@@ -46,15 +46,17 @@ export function AttendanceMarking({
     setStatuses(Object.fromEntries(students.map((s) => [s.id, value])));
   };
 
-  const save = () => {
+  const save = (override?: Record<string, string>) => {
     setError(null);
     setDone(false);
+    const entries = override ?? statuses;
+    if (override) setStatuses(override);
     startTransition(async () => {
       try {
         await saveAttendanceAction({
           classId,
           date,
-          entries: Object.entries(statuses).map(([studentId, status]) => ({
+          entries: Object.entries(entries).map(([studentId, status]) => ({
             studentId,
             status,
           })),
@@ -64,6 +66,10 @@ export function AttendanceMarking({
         setError(e instanceof Error ? e.message : "Failed to save attendance.");
       }
     });
+  };
+
+  const saveAllPresent = () => {
+    save(Object.fromEntries(students.map((s) => [s.id, "PRESENT"])));
   };
 
   return (
@@ -78,7 +84,16 @@ export function AttendanceMarking({
           <button type="button" className={btnOutline} onClick={() => markAll("PRESENT")}>
             <CheckCheck size={15} /> All present
           </button>
-          <button type="button" className={btnPrimary} onClick={save} disabled={pending}>
+          <button
+            type="button"
+            className={btnOutline}
+            onClick={saveAllPresent}
+            disabled={pending}
+            title="Mark everyone present and save in one tap"
+          >
+            <Save size={15} /> Present &amp; save
+          </button>
+          <button type="button" className={btnPrimary} onClick={() => save()} disabled={pending}>
             {pending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             {pending ? "Saving…" : "Save attendance"}
           </button>

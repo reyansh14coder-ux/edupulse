@@ -57,7 +57,7 @@ export default async function AdminSetupPage({
     <div className="animate-fade-in">
       <PageHeader
         title="Academic setup"
-        sub="Board, classes, subjects, syllabus, teachers and students — the foundation of the EduPulse record."
+        sub="Board, classes, subjects, syllabus, teachers and students — the foundation of the Vidyora record."
         action={<Badge tone="brand">Board: CBSE · Year 2026-27</Badge>}
       />
 

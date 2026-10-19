@@ -17,11 +17,11 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "EduPulse — Continuous student support, powered by data",
-    template: "%s · EduPulse",
+    default: "Vidyora — Continuous student support, powered by data",
+    template: "%s · Vidyora",
   },
   description:
-    "EduPulse collects marks, attendance, homework and school activity into one student progress database — then turns it into insights for teachers, parents and students.",
+    "Vidyora collects marks, attendance, homework and school activity into one student progress database — then turns it into insights for teachers, parents and students.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

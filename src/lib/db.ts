@@ -12,7 +12,7 @@ function resolveDbUrl(): string {
       "/var/task/prisma/dev.db",
       "/var/task/dev.db",
     ];
-    const dst = "/tmp/edupulse-dev.db";
+    const dst = "/tmp/Vidyora-dev.db";
     try {
       if (!fs.existsSync(dst)) {
         const src = candidates.find((p) => fs.existsSync(p));

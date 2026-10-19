@@ -82,6 +82,12 @@ export default async function StudentDashboardPage() {
         action={
           <div className="flex gap-2">
             <Link
+              href="/student/plan"
+              className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_10px_30px_-12px_rgba(79,70,229,.7)] transition hover:bg-brand-700"
+            >
+              My learning plan
+            </Link>
+            <Link
               href={`/students/${pulse.student.id}`}
               className="rounded-xl border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink-700 transition hover:border-brand-300 hover:text-brand-700"
             >
