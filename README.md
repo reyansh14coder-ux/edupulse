@@ -80,10 +80,10 @@ Password for all accounts: **`demo123`**
 
 | Role    | Email                  | Notes                          |
 |---------|------------------------|--------------------------------|
-| Admin   | admin@Vidyora.in      | Principal — full school view   |
-| Teacher | teacher@Vidyora.in    | Anjali Sharma — Mathematics    |
-| Parent  | parent@Vidyora.in     | Rakesh Patel — weekly reports  |
-| Student | student@Vidyora.in    | Aarav Patel — Class 6A         |
+| Admin   | admin@vidyora.in      | Principal — full school view   |
+| Teacher | teacher@vidyora.in    | Anjali Sharma — Mathematics    |
+| Parent  | parent@vidyora.in     | Rakesh Patel — weekly reports  |
+| Student | student@vidyora.in    | Aarav Patel — Class 6A         |
 
 ---
 

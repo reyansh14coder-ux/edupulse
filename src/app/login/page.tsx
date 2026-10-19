@@ -22,25 +22,25 @@ import { cn } from "@/lib/utils";
 const DEMO = [
   {
     role: "Admin",
-    email: "admin@Vidyora.in",
+    email: "admin@vidyora.in",
     desc: "Principal · full school view",
     icon: <ShieldCheck size={16} />,
   },
   {
     role: "Teacher",
-    email: "teacher@Vidyora.in",
+    email: "teacher@vidyora.in",
     desc: "Anjali Sharma · Mathematics",
     icon: <GraduationCap size={16} />,
   },
   {
     role: "Parent",
-    email: "parent@Vidyora.in",
+    email: "parent@vidyora.in",
     desc: "Rakesh Patel · weekly reports",
     icon: <Newspaper size={16} />,
   },
   {
     role: "Student",
-    email: "student@Vidyora.in",
+    email: "student@vidyora.in",
     desc: "Aarav Patel · Class 6 A",
     icon: <BarChart3 size={16} />,
   },
