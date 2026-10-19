@@ -316,7 +316,7 @@ async function main() {
         assessmentIds.push(a.id);
         const clsStudents = students.filter((s) => s.classId === cls.id);
         for (const st of clsStudents) {
-          let ability = abilities.get(st.id)!;
+          const ability = abilities.get(st.id)!;
           const aff = affinities.get(st.id + subject)!;
           // Aarav: declining math story
           let eff = ability + aff;
@@ -451,43 +451,63 @@ async function main() {
         },
       });
 
-      if (cls.name === "Class 6" && (subject === "Mathematics" || subject === "English")) {
+      if (subject === "Mathematics" || subject === "English") {
         const who =
           subject === "Mathematics"
             ? students.find((s) => s.name === "Aarav Patel")
             : students.find((s) => s.name === "Diya Reddy");
         if (who) {
-          const answers = questions.map((qq) =>
-            rand() < (subject === "Mathematics" ? 0.5 : 0.85) ? qq.answer : (qq.answer + 1) % 4
-          );
-          let sc = 0;
-          const detail = questions.map((qq, qi) => {
-            const ok = answers[qi] === qq.answer;
-            if (ok) sc++;
-            return { picked: answers[qi], correct: ok };
-          });
-          await db.quizAttempt.create({
-            data: {
-              quizId: quiz.id,
-              studentId: who.id,
-              score: sc,
-              total: questions.length,
-              detail: JSON.stringify(detail),
-            },
-          });
-          const a = await db.assessment.create({
-            data: {
-              title: `Quiz · ${quiz.title}`,
-              type: "QUIZ",
-              classId: cls.id,
-              subject,
-              date: d(2026, 9, 14),
-              maxMarks: questions.length,
-            },
-          });
-          await db.score.create({
-            data: { assessmentId: a.id, studentId: who.id, marks: sc },
-          });
+          const accuracy = subject === "Mathematics" ? [0.55, 0.2] : [0.8, 0.5];
+          let firstScore = 0;
+          for (const [attemptIdx, acc] of accuracy.entries()) {
+            const targetQuiz =
+              attemptIdx === 0
+                ? quiz
+                : await db.quiz.create({
+                    data: {
+                      title: `${subject} – ${chapter} (Revision Quiz)`,
+                      classId: cls.id,
+                      subject,
+                      chapter,
+                      questions: JSON.stringify(questions),
+                      createdById: quiz.createdById,
+                    },
+                  });
+            const answers = questions.map((qq) =>
+              rand() < acc ? qq.answer : (qq.answer + 1) % 4
+            );
+            let sc = 0;
+            const detail = questions.map((qq, qi) => {
+              const ok = answers[qi] === qq.answer;
+              if (ok) sc++;
+              return { picked: answers[qi], correct: ok };
+            });
+            if (attemptIdx === 0) firstScore = sc;
+            await db.quizAttempt.create({
+              data: {
+                quizId: targetQuiz.id,
+                studentId: who.id,
+                score: sc,
+                total: questions.length,
+                detail: JSON.stringify(detail),
+              },
+            });
+          }
+          if (cls.name === "Class 6") {
+            const a = await db.assessment.create({
+              data: {
+                title: `Quiz · ${quiz.title}`,
+                type: "QUIZ",
+                classId: cls.id,
+                subject,
+                date: d(2026, 9, 14),
+                maxMarks: questions.length,
+              },
+            });
+            await db.score.create({
+              data: { assessmentId: a.id, studentId: who.id, marks: firstScore },
+            });
+          }
         }
       }
     }

@@ -3,10 +3,13 @@ import { notFound } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpen,
   CalendarDays,
   CheckCircle2,
   ListChecks,
   Mail,
+  MessageSquare,
+  Sparkles,
   Target,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
@@ -49,11 +52,6 @@ export default async function ParentReportPage({
         include: {
           user: { select: { name: true } },
           schoolClass: true,
-          guidance: {
-            include: { author: { select: { name: true } } },
-            orderBy: { createdAt: "desc" },
-            take: 3,
-          },
         },
       },
     },
@@ -184,6 +182,59 @@ export default async function ParentReportPage({
           </div>
         </div>
 
+        <div className="border-b border-line p-6">
+          <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+            <Sparkles size={16} className="text-violet-500" />{" "}
+            {t.aiSummaryTitle}
+          </h3>
+          <p className="mt-2 text-[14px] leading-relaxed text-ink-700">
+            <span className="font-bold text-ink-800">{t.studiesLabel}:</span>{" "}
+            {report.general.studies}
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-mint-200 bg-mint-500/5 p-4">
+              <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-mint-600">
+                <CheckCircle2 size={12} /> {t.achievements}
+              </p>
+              <ul className="mt-2 space-y-2">
+                {report.general.achievements.map((a, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2.5 text-[13.5px] leading-relaxed text-ink-700"
+                  >
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-mint-500" />
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-4">
+              <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-rose-500">
+                <Target size={12} /> {t.focusAreas}
+              </p>
+              <ul className="mt-2 space-y-2">
+                {report.general.focus.map((f, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2.5 text-[13.5px] leading-relaxed text-ink-700"
+                  >
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+            <p className="text-[11.5px] font-bold uppercase tracking-wider text-violet-600">
+              {t.adviceLabel}
+            </p>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-700">
+              {report.general.advice}
+            </p>
+          </div>
+        </div>
+
         <div className="grid border-b border-line lg:grid-cols-2">
           <div className="border-b border-line p-6 lg:border-b-0 lg:border-r">
             <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
@@ -214,6 +265,91 @@ export default async function ParentReportPage({
               ))}
               {!report.concerns.length && (
                 <li className="text-[13px] text-ink-500">{t.emptyConcerns}</li>
+              )}
+            </ul>
+          </div>
+        </div>
+
+        <div className="grid border-b border-line lg:grid-cols-3">
+          <div className="border-b border-line p-6 lg:col-span-2 lg:border-b-0 lg:border-r">
+            <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+              <BookOpen size={16} className="text-brand-600" />{" "}
+              {t.subjectsTitle}
+            </h3>
+            <p className="mt-1 text-[12.5px] text-ink-500">{t.subjectsSub}</p>
+            <ul className="mt-3 space-y-3">
+              {report.subjects.map((s, i) => (
+                <li
+                  key={i}
+                  className="rounded-xl border border-line bg-surface/60 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-[14px] font-extrabold text-ink-900">
+                      {s.subject}
+                    </span>
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-extrabold text-brand-600">
+                      {pct(s.avg)}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Delta value={s.trend} />
+                      <span className="text-[11.5px] font-semibold text-ink-400">
+                        {t.delta}
+                      </span>
+                    </span>
+                    <span className="text-[11.5px] text-ink-400">
+                      {s.count} assessment{s.count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-700">
+                    {s.rec}
+                  </p>
+                  {s.weakChapters.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {s.weakChapters.map((ch) => (
+                        <Badge key={ch} tone="warning">
+                          {ch}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+              {!report.subjects.length && (
+                <li className="text-[13px] text-ink-500">{t.noSubjects}</li>
+              )}
+            </ul>
+          </div>
+          <div className="p-6">
+            <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+              <MessageSquare size={16} className="text-violet-600" />{" "}
+              {t.teacherAdvice}
+            </h3>
+            <ul className="mt-3 space-y-3">
+              {report.notes.map((n) => (
+                <li
+                  key={n.id}
+                  className="rounded-xl border border-violet-100 bg-violet-50/40 p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={n.kind === "Teacher" ? "brand" : "success"}>
+                      {n.kind === "Teacher" ? n.category : "Counselor"}
+                    </Badge>
+                    <span className="text-[12px] text-ink-500">
+                      {n.author} · {fmtDate(n.date)}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 font-display text-[13.5px] font-extrabold text-ink-900">
+                    {n.title}
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
+                    {n.excerpt}
+                  </p>
+                </li>
+              ))}
+              {!report.notes.length && (
+                <li className="text-[13px] text-ink-500">
+                  {t.noTeacherAdvice}
+                </li>
               )}
             </ul>
           </div>
@@ -308,30 +444,6 @@ export default async function ParentReportPage({
             {report.focusNext}
           </p>
         </div>
-
-        {active.guidance.length > 0 && (
-          <div className="border-b border-line p-6">
-            <h3 className="font-display text-[14.5px] font-extrabold text-ink-900">
-              {t.notes}
-            </h3>
-            <ul className="mt-3 space-y-3">
-              {active.guidance.map((g) => (
-                <li key={g.id} className="rounded-xl border border-line bg-surface/60 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="brand">{g.category}</Badge>
-                    <span className="text-[12.5px] text-ink-500">
-                      {g.author.name} · {fmtDate(g.createdAt)}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 font-display text-[14px] font-extrabold text-ink-900">
-                    {g.title}
-                  </p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-ink-600">{g.body}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <div className="flex flex-wrap items-center justify-between gap-4 p-6">
           <p className="text-[12.5px] text-ink-400">{t.footer}</p>

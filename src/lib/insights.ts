@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { isoDate } from "@/lib/utils";
 import { REPORT_COPY, localeOf, type Lang } from "@/lib/report-i18n";
+import { learningGaps } from "@/lib/gaps";
 
 export type SubjectStat = {
   subject: string;
@@ -483,6 +484,29 @@ export type WeeklyReport = {
   delta: number | null;
   weekAvg: number | null;
   plans: { title: string; plan: string }[];
+  general: {
+    studies: string;
+    achievements: string[];
+    focus: string[];
+    advice: string;
+  };
+  subjects: {
+    subject: string;
+    avg: number;
+    count: number;
+    trend: number;
+    weakChapters: string[];
+    rec: string;
+  }[];
+  notes: {
+    id: string;
+    kind: "Teacher" | "Counselor";
+    author: string;
+    category: string;
+    title: string;
+    excerpt: string;
+    date: string;
+  }[];
 };
 
 export async function weeklyReport(
@@ -609,6 +633,125 @@ export async function weeklyReport(
     take: 4,
   });
 
+  const [gaps, doneGoals, counseling] = await Promise.all([
+    learningGaps(studentId),
+    db.studentGoal.count({
+      where: { studentId, kind: "GOAL", status: "DONE" },
+    }),
+    db.counselingSession.findMany({
+      where: { studentId, notes: { not: null } },
+      include: { counselor: { select: { name: true } } },
+      orderBy: { scheduledFor: "desc" },
+      take: 2,
+    }),
+  ]);
+
+  const submittedCount = student.submissions.filter(
+    (s) => s.status !== "PENDING"
+  ).length;
+  const generalStudies = t.studiesLine(
+    student.scores.length,
+    bySubject.length,
+    submittedCount,
+    student.submissions.length
+  );
+
+  const achievements: string[] = [];
+  const topSubject = bySubject[0];
+  if (topSubject && topSubject.avg >= 70)
+    achievements.push(t.aTop(topSubject.subject, Math.round(topSubject.avg)));
+  const improving = [...bySubject].sort((a, b) => b.trend - a.trend)[0];
+  if (improving && improving.trend > 4)
+    achievements.push(t.aImproving(improving.subject));
+  if (attPct >= 90 && weekAttendance.length)
+    achievements.push(t.aAttendance(Math.round(attPct)));
+  if (doneGoals > 0) achievements.push(t.aGoals(doneGoals));
+  if (!achievements.length) achievements.push(t.aNone);
+
+  const focusAreas: string[] = [];
+  const weakestSubject = bySubject[bySubject.length - 1];
+  if (weakestSubject && weakestSubject.avg < 75)
+    focusAreas.push(
+      t.fWeak(weakestSubject.subject, Math.round(weakestSubject.avg))
+    );
+  if (gaps.weak.length)
+    focusAreas.push(
+      t.fGaps(
+        gaps.weak.length,
+        gaps.weak
+          .slice(0, 3)
+          .map((g) => `${g.subject}: ${g.chapter}`)
+          .join("; ")
+      )
+    );
+  const declining = [...bySubject].sort((a, b) => a.trend - b.trend)[0];
+  if (
+    declining &&
+    declining.trend < -5 &&
+    declining.subject !== weakestSubject?.subject
+  )
+    focusAreas.push(t.fDecline(declining.subject));
+  if (absents.length >= 2) focusAreas.push(t.cAbsent(absents.length));
+  if (pending.length) focusAreas.push(t.cPending(pending.length));
+  if (!focusAreas.length) focusAreas.push(t.focusOk);
+
+  const generalAdvice = t.adviceLine(
+    weakestSubject ? weakestSubject.subject : null,
+    weakestSubject ? Math.round(weakestSubject.avg) : null
+  );
+
+  const subjectRows = bySubject.map((s) => {
+    const weakChapters = gaps.weak
+      .filter((g) => g.subject === s.subject)
+      .slice(0, 3)
+      .map((g) => g.chapter);
+    const level =
+      s.avg >= 78
+        ? ("excellent" as const)
+        : s.avg >= 62
+          ? ("good" as const)
+          : s.avg >= 45
+            ? ("revise" as const)
+            : ("urgent" as const);
+    let rec = t.sRec(s.subject, Math.round(s.avg), level);
+    if (s.trend > 4) rec += t.trendUp;
+    else if (s.trend < -4) rec += t.trendDown;
+    if (weakChapters.length) rec += t.sGaps(weakChapters.join(", "));
+    return {
+      subject: s.subject,
+      avg: s.avg,
+      count: s.count,
+      trend: s.trend,
+      weakChapters,
+      rec,
+    };
+  });
+
+  const noteRows = [
+    ...student.guidance.map((g) => ({
+      id: g.id,
+      kind: "Teacher" as const,
+      author: g.author.name,
+      category: g.category,
+      title: g.title,
+      excerpt:
+        g.body.length > 150 ? `${g.body.slice(0, 150).trim()}…` : g.body,
+      date: isoDate(g.createdAt),
+    })),
+    ...counseling.map((c) => ({
+      id: c.id,
+      kind: "Counselor" as const,
+      author: c.counselor.name,
+      category: "COUNSELING",
+      title: "Counseling session",
+      excerpt:
+        (c.notes ?? "").length > 150
+          ? `${(c.notes ?? "").slice(0, 150).trim()}…`
+          : c.notes ?? "",
+      date: isoDate(c.scheduledFor),
+    })),
+  ].slice(0, 4);
+
   return {
     periodLabel: `${monday.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${new Date(weekEnd.getTime() - 864e5).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}`,
     attendance: { present, total: weekAttendance.length, pct: attPct, absents },
@@ -627,6 +770,14 @@ export async function weeklyReport(
     delta,
     weekAvg,
     plans: plans.map((p) => ({ title: p.title, plan: p.plan ?? "" })),
+    general: {
+      studies: generalStudies,
+      achievements,
+      focus: focusAreas,
+      advice: generalAdvice,
+    },
+    subjects: subjectRows,
+    notes: noteRows,
   };
 }
 

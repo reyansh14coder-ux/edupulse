@@ -64,6 +64,35 @@ type Copy = {
   cPending: (n: number) => string;
   focusLine: (subject: string, avg: number) => string;
   focusNone: string;
+  aiSummaryTitle: string;
+  adviceLabel: string;
+  studiesLabel: string;
+  achievements: string;
+  focusAreas: string;
+  subjectsTitle: string;
+  subjectsSub: string;
+  teacherAdvice: string;
+  noTeacherAdvice: string;
+  studiesLine: (a: number, subj: number, sub: number, tot: number) => string;
+  aTop: (subject: string, avg: number) => string;
+  aImproving: (subject: string) => string;
+  aAttendance: (pct: number) => string;
+  aGoals: (n: number) => string;
+  aNone: string;
+  fWeak: (subject: string, avg: number) => string;
+  fGaps: (n: number, chapters: string) => string;
+  fDecline: (subject: string) => string;
+  focusOk: string;
+  adviceLine: (subject: string | null, avg: number | null) => string;
+  sRec: (
+    subject: string,
+    avg: number,
+    level: "excellent" | "good" | "revise" | "urgent"
+  ) => string;
+  trendUp: string;
+  trendDown: string;
+  sGaps: (chapters: string) => string;
+  noSubjects: string;
 };
 
 export const REPORT_COPY: Record<Lang, Copy> = {
@@ -113,6 +142,53 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     focusLine: (subject, avg) =>
       `Revise ${subject} fundamentals (currently averaging ${avg}%) and complete pending homework before the next unit test.`,
     focusNone: "Keep up the balanced routine across all subjects.",
+    aiSummaryTitle: "Overall summary & AI recommendations",
+    adviceLabel: "AI recommendation",
+    studiesLabel: "Studies so far",
+    achievements: "Achievements",
+    focusAreas: "Where to focus more",
+    subjectsTitle: "Subject-wise summaries & recommendations",
+    subjectsSub: "All-time averages, weekly trend and AI advice per subject",
+    teacherAdvice: "Teacher & counselor recommendations",
+    noTeacherAdvice:
+      "No teacher or counselor notes yet — notes will appear here as they are shared.",
+    studiesLine: (a, subj, sub, tot) =>
+      `${a} assessment(s) across ${subj} subject(s) so far, with ${sub} of ${tot} homework items submitted.`,
+    aTop: (subject, avg) =>
+      `${subject} is the strongest subject — ${avg}% average across all assessments.`,
+    aImproving: (subject) =>
+      `${subject} scores have been improving steadily in recent assessments.`,
+    aAttendance: (pct) =>
+      `${pct}% attendance — a strong, consistent routine.`,
+    aGoals: (n) =>
+      `${n} personal goal(s) completed — self-driven improvement.`,
+    aNone:
+      "No standout achievement recorded this period — steady work continues.",
+    fWeak: (subject, avg) =>
+      `${subject} is the weakest subject (avg ${avg}%) and needs the most focused time.`,
+    fGaps: (n, chapters) =>
+      `${n} quiz chapter(s) below 75% accuracy: ${chapters}.`,
+    fDecline: (subject) =>
+      `${subject} results have dipped lately — revise before the next test.`,
+    focusOk:
+      "No major weak area detected — keep the current weekly routine going.",
+    adviceLine: (subject, avg) =>
+      subject && avg !== null
+        ? `Focus most on ${subject} (avg ${avg}%): revise its basics for 30 minutes daily, solve the listed weak-chapter question types, and watch the linked video lessons. Keep the other subjects on the same weekly routine.`
+        : `Maintain the current weekly routine — attempt one practice quiz every week to keep every subject sharp.`,
+    sRec: (subject, avg, level) => {
+      if (level === "excellent")
+        return `${subject} is a strength (${avg}%) — try challenge and Olympiad-style questions to stay ahead.`;
+      if (level === "good")
+        return `${subject} is on track (${avg}%) — revise once a week and attempt mixed practice to stay above 80%.`;
+      if (level === "revise")
+        return `${subject} needs revision (${avg}%) — redo textbook examples, then solve 10 similar questions daily this week.`;
+      return `${subject} needs immediate support (${avg}%) — clear the basics with the teacher, watch the chapter video, then take the practice quiz again.`;
+    },
+    trendUp: " Trend is improving.",
+    trendDown: " Trend is declining — act early.",
+    sGaps: (chapters) => ` Weak chapters: ${chapters}.`,
+    noSubjects: "No subject scores recorded yet.",
   },
   hi: {
     title: "साप्ताहिक प्रगति रिपोर्ट",
@@ -160,6 +236,53 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     focusLine: (subject, avg) =>
       `${subject} की मूल बातें दोहराएँ (वर्तमान औसत ${avg}%) और अगली यूनिट टेस्ट से पहले बाकी होमवर्क पूरा करें।`,
     focusNone: "सभी विषयों में संतुलित दिनचर्या बनाए रखें।",
+    aiSummaryTitle: "समग्र सारांश व AI सुझाव",
+    adviceLabel: "AI सिफ़ारिश",
+    studiesLabel: "अब तक की पढ़ाई",
+    achievements: "उपलब्धियाँ",
+    focusAreas: "और ध्यान देने योग्य बिंदु",
+    subjectsTitle: "विषयवार सारांश व AI सुझाव",
+    subjectsSub: "कुल औसत, हफ़्ते की प्रवृत्ति और हर विषय के लिए AI सलाह",
+    teacherAdvice: "शिक्षक व परामर्शदाता की सिफ़ारिशें",
+    noTeacherAdvice:
+      "अभी शिक्षक या परामर्शदाता की कोई टिप्पणी नहीं — जैसे ही साझा होगी यहाँ दिखेगी।",
+    studiesLine: (a, subj, sub, tot) =>
+      `अब तक ${subj} विषय(ओं) में ${a} मूल्यांकन, और ${tot} में से ${sub} होमवर्क जमा।`,
+    aTop: (subject, avg) =>
+      `${subject} सबसे मज़बूत विषय है — सभी मूल्यांकनों में ${avg}% औसत।`,
+    aImproving: (subject) =>
+      `${subject} के अंक हाल के मूल्यांकनों में लगातार बेहतर हो रहे हैं।`,
+    aAttendance: (pct) =>
+      `${pct}% उपस्थिति — मज़बूत व नियमित दिनचर्या।`,
+    aGoals: (n) =>
+      `${n} व्यक्तिगत लक्ष्य पूरे — आत्म-प्रेरित सुधार।`,
+    aNone:
+      "इस अवधि में कोई विशेष उपलब्धि दर्ज नहीं — नियमित प्रयास जारी है।",
+    fWeak: (subject, avg) =>
+      `${subject} सबसे कमज़ोर विषय है (औसत ${avg}%) और सबसे अधिक केंद्रित समय चाहिए।`,
+    fGaps: (n, chapters) =>
+      `${n} क्विज़ अध्याय 75% से नीचे: ${chapters}।`,
+    fDecline: (subject) =>
+      `${subject} के परिणाम हाल में गिरे हैं — अगली परीक्षा से पहले दोहराएँ।`,
+    focusOk:
+      "कोई बड़ा कमज़ोर क्षेत्र नहीं मिला — मौजूदा साप्ताहिक दिनचर्या बनाए रखें।",
+    adviceLine: (subject, avg) =>
+      subject && avg !== null
+        ? `${subject} पर सबसे अधिक ध्यान दें (औसत ${avg}%): रोज़ 30 मिनट मूल बातें दोहराएँ, ऊपर दिए कमज़ोर अध्यायों के प्रश्न-प्रकार हल करें और दिए गए वीडियो देखें। बाकी विषयों में वही साप्ताहिक दिनचर्या रखें।`
+        : `मौजूदा साप्ताहिक दिनचर्या बनाए रखें — हर हफ़्ते एक अभ्यास क्विज़ दें ताकि हर विषय मज़बूत रहे।`,
+    sRec: (subject, avg, level) => {
+      if (level === "excellent")
+        return `${subject} आपकी ताकत है (${avg}%) — आगे रहने के लिए चैलेंज व ओलंपियाड-स्तर के प्रश्न हल करें।`;
+      if (level === "good")
+        return `${subject} ठीक चल रहा है (${avg}%) — हफ़्ते में एक बार दोहराएँ और 80% से ऊपर रहने के लिए मिश्रित अभ्यास करें।`;
+      if (level === "revise")
+        return `${subject} का दोहरान ज़रूरी है (${avg}%) — पाठ्यपुस्तक के उदाहरण फिर हल करें, इस हफ़्ते रोज़ 10 समान प्रश्न करें।`;
+      return `${subject} को तुरंत सहारा चाहिए (${avg}%) — शिक्षक से मूल बातें स्पष्ट कराएँ, अध्याय वीडियो देखें, फिर अभ्यास क्विज़ दोबारा दें।`;
+    },
+    trendUp: " प्रवृत्ति बेहतर हो रही है।",
+    trendDown: " प्रवृत्ति गिर रही है — जल्दी कदम उठाएँ।",
+    sGaps: (chapters) => ` कमज़ोर अध्याय: ${chapters}।`,
+    noSubjects: "अभी कोई विषय-अंक दर्ज नहीं।",
   },
   mr: {
     title: "साप्ताहिक प्रगती अहवाल",
@@ -207,5 +330,52 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     focusLine: (subject, avg) =>
       `${subject} मधील मूलभूत गोष्टी पुन्हा पाहा (सधीली सरासरी ${avg}%) आणि पुढील युनिट चाचणीपूर्वी उरलेले गृहकार्य पूर्ण करा.`,
     focusNone: "सर्व विषयांमध्ये संतुलित दिनचर्या कायम ठेवा.",
+    aiSummaryTitle: "एकूण सारांश व AI शिफारसी",
+    adviceLabel: "AI शिफारस",
+    studiesLabel: "आतापर्यंतचा अभ्यास",
+    achievements: "यशोगाथा",
+    focusAreas: "आणखी लक्ष देण्यायोग्य बाबी",
+    subjectsTitle: "विषयनिहाय सारांश व AI शिफारसी",
+    subjectsSub: "एकूण सरासरी, आठवड्याची कल आणि प्रत्येक विषयासाठी AI सल्ला",
+    teacherAdvice: "शिक्षक व समुपदेशकांच्या शिफारसी",
+    noTeacherAdvice:
+      "अद्याप शिक्षक किंवा समुपदेशकांच्या टिपा नाहीत — शेअर झाल्यावर इथे दिसतील.",
+    studiesLine: (a, subj, sub, tot) =>
+      `आतापर्यंत ${subj} विषयांमध्ये ${a} मूल्यांकने, व ${tot} पैकी ${sub} गृहकार्य सादर झाले.`,
+    aTop: (subject, avg) =>
+      `${subject} सर्वात मजबूत विषय आहे — सर्व मूल्यांकनांमध्ये ${avg}% सरासरी.`,
+    aImproving: (subject) =>
+      `${subject} चे गुण अलीकडील मूल्यांकनांमध्ये सातत्याने सुधारत आहेत.`,
+    aAttendance: (pct) =>
+      `${pct}% उपस्थिती — मजबूत व नियमित दिनचर्या.`,
+    aGoals: (n) =>
+      `${n} वैयक्तिक लक्ष्य पूर्ण — स्वतः-प्रेरित सुधारणा.`,
+    aNone:
+      "या कालावधीत कोणतेही ठळे यश नोंदवले नाही — नियमित प्रयत्न सुरू आहेत.",
+    fWeak: (subject, avg) =>
+      `${subject} सर्वात कमकुवत विषय आहे (सरासरी ${avg}%) आणि सर्वाधिक केंद्रित वेळ लागेल.`,
+    fGaps: (n, chapters) =>
+      `${n} क्विझ धडे 75% खाली: ${chapters}.`,
+    fDecline: (subject) =>
+      `${subject} चे निकाल अलीकडे खाली आले आहेत — पुढील चाचणीपूर्वी पुन्हा पाहा.`,
+    focusOk:
+      "कोणताही मोठा कमकुवत भाग सापडला नाही — सध्याची साप्ताहिक दिनचर्या कायम ठेवा.",
+    adviceLine: (subject, avg) =>
+      subject && avg !== null
+        ? `${subject} वर सर्वाधिक लक्ष द्या (सरासरी ${avg}%): रोज ३० मिनिटे मूलभूत गोष्टी पुन्हा पाहा, वर दिलेल्या कमकुवत धड्यांच्या प्रश्नप्रकार सोडवा आणि दिलेले व्हिडिओ पहा. इतर विषयांमध्ये तीच साप्ताहिक दिनचर्या ठेवा.`
+        : `सध्याची साप्ताहिक दिनचर्या कायम ठेवा — दर आठवड्याला एक सराव क्विझ द्या, जेणेकरून प्रत्येक विषय मजबूत राहील.`,
+    sRec: (subject, avg, level) => {
+      if (level === "excellent")
+        return `${subject} तुमची ताकद आहे (${avg}%) — पुढे राहण्यासाठी आव्हानकारक व ओलंपियाड-स्तराचे प्रश्न सोडवा.`;
+      if (level === "good")
+        return `${subject} ठीक चालू आहे (${avg}%) — आठवड्यातून एकदा पुन्हा पाहा आणि ८०% वर राहण्यासाठी मिश्र सराव करा.`;
+      if (level === "revise")
+        return `${subject} पुन्हा पाहणे आवश्यक आहे (${avg}%) — पाठ्यपुस्तकातील उदाहरणे पुन्हा सोडवा, या आठवड्यात रोज १० समान प्रश्न करा.`;
+      return `${subject} ला लगेच मदत हवी आहे (${avg}%) — शिक्षकांकडून मूलभूत गोष्टी स्पष्ट करा, धडा व्हिडिओ पहा, मग सराव क्विझ पुन्हा द्या.`;
+    },
+    trendUp: " कल सुधारत आहे.",
+    trendDown: " कल खाली पडत आहे — लवकर उपाय करा.",
+    sGaps: (chapters) => ` कमकुवत धडे: ${chapters}.`,
+    noSubjects: "अद्याप कोणतेही विषयगुण नोंदवलेले नाहीत.",
   },
 };

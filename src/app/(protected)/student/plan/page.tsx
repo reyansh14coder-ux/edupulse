@@ -3,12 +3,17 @@ import {
   BookOpenCheck,
   CheckCircle2,
   Flag,
+  Lightbulb,
+  Play,
   Plus,
   Sparkles,
+  Target,
+  XCircle,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { learningGaps } from "@/lib/gaps";
+import { improveFor } from "@/lib/improve";
 import { progressTimeline } from "@/lib/insights";
 import { ensureRecommendations } from "@/lib/ai";
 import { fmtDate } from "@/lib/utils";
@@ -143,6 +148,127 @@ export default async function StudentPlanPage() {
                 icon={<BookOpenCheck size={20} />}
               />
             )}
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="How to improve your gaps"
+              sub="Tricks, question types to practise and an explanation video for each weak chapter"
+              action={
+                <Badge tone="warning">
+                  {gaps.weak.length
+                    ? `${Math.min(gaps.weak.length, 3)} chapters covered`
+                    : "No gaps"}
+                </Badge>
+              }
+            />
+            <div className="space-y-4 p-5 pt-4">
+              {gaps.weak.slice(0, 3).map((g, i) => {
+                const plan = improveFor(g.subject, g.chapter);
+                return (
+                  <div
+                    key={`${g.subject}-${g.chapter}-${i}`}
+                    className="rounded-2xl border border-line bg-surface/60 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={SEVERITY_TONE[g.severity]}>
+                        {g.severity === "weak" ? "Gap" : "Review"}
+                      </Badge>
+                      <p className="font-display text-[14.5px] font-extrabold text-ink-900">
+                        {g.subject} — {g.chapter}
+                      </p>
+                      <span className="text-[12px] font-bold text-ink-500">
+                        {Math.round(g.pct)}% accuracy ({g.correct}/{g.total})
+                      </span>
+                    </div>
+
+                    {g.wrong.length > 0 && (
+                      <div className="mt-3">
+                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-rose-500">
+                          <XCircle size={12} /> Questions you got wrong
+                        </p>
+                        <ul className="mt-1.5 space-y-2">
+                          {g.wrong.map((w, j) => (
+                            <li
+                              key={j}
+                              className="rounded-xl border border-rose-100 bg-rose-50/50 px-3.5 py-2.5"
+                            >
+                              <p className="text-[13px] font-semibold text-ink-800">
+                                {j + 1}. {w.q}
+                              </p>
+                              <p className="mt-1 flex flex-wrap gap-x-4 text-[12.5px] text-ink-600">
+                                <span className="text-rose-600">
+                                  Your answer: {w.yourAnswer}
+                                </span>
+                                <span className="font-semibold text-mint-600">
+                                  Correct: {w.correctAnswer}
+                                </span>
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
+                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-violet-600">
+                          <Lightbulb size={12} /> Tricks to solve
+                        </p>
+                        <ul className="mt-1.5 space-y-1.5">
+                          {plan.tricks.map((t, j) => (
+                            <li
+                              key={j}
+                              className="flex gap-2 text-[13px] leading-relaxed text-ink-700"
+                            >
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                              {t}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-3.5">
+                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-brand-600">
+                          <Target size={12} /> Practice these question types
+                        </p>
+                        <ul className="mt-1.5 space-y-1.5">
+                          {plan.practice.map((t, j) => (
+                            <li
+                              key={j}
+                              className="flex gap-2 text-[13px] leading-relaxed text-ink-700"
+                            >
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
+                              {t}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <a
+                        href={plan.video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-2 text-[12.5px] font-bold text-brand-600 transition hover:border-brand-300 hover:bg-brand-50"
+                      >
+                        <Play size={13} /> Watch explanation video
+                      </a>
+                      <span className="text-[12px] text-ink-400">
+                        {plan.video.title}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {!gaps.weak.length && (
+                <EmptyState
+                  title="No weak chapters — great work!"
+                  hint="Once you attempt chapter-wise quizzes, personalised improvement plans with tricks, practice sets and videos will appear here."
+                  icon={<CheckCircle2 size={20} />}
+                />
+              )}
+            </div>
           </Card>
 
           <Card>

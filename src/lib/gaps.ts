@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
 
+export type WrongExample = {
+  q: string;
+  yourAnswer: string;
+  correctAnswer: string;
+};
+
 export type ChapterGap = {
   subject: string;
   chapter: string;
@@ -7,6 +13,7 @@ export type ChapterGap = {
   total: number;
   pct: number;
   severity: "weak" | "review" | "strong";
+  wrong: WrongExample[];
 };
 
 function severityOf(pct: number): ChapterGap["severity"] {
@@ -25,8 +32,13 @@ export async function learningGaps(studentId: string) {
   const map = new Map<string, ChapterGap>();
 
   for (const attempt of attempts) {
-    let questions: { chapter?: string }[] = [];
-    let detail: { correct?: boolean }[] = [];
+    let questions: {
+      chapter?: string;
+      q?: string;
+      options?: string[];
+      answer?: number;
+    }[] = [];
+    let detail: { correct?: boolean; picked?: number }[] = [];
     try {
       questions = JSON.parse(attempt.quiz.questions);
       detail = JSON.parse(attempt.detail);
@@ -45,9 +57,25 @@ export async function learningGaps(studentId: string) {
           total: 0,
           pct: 0,
           severity: "strong",
+          wrong: [],
         } satisfies ChapterGap);
       entry.total += 1;
       if (detail[i]?.correct) entry.correct += 1;
+      else if (entry.wrong.length < 2 && q.q) {
+        const opts = q.options ?? [];
+        const picked = detail[i]?.picked;
+        entry.wrong.push({
+          q: q.q,
+          yourAnswer:
+            typeof picked === "number" && opts[picked]
+              ? opts[picked]
+              : "—",
+          correctAnswer:
+            typeof q.answer === "number" && opts[q.answer]
+              ? opts[q.answer]
+              : "—",
+        });
+      }
       entry.pct = entry.total ? (entry.correct / entry.total) * 100 : 0;
       entry.severity = severityOf(entry.pct);
       map.set(key, entry);
