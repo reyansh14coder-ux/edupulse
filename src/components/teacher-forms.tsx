@@ -13,6 +13,10 @@ type ClassOption = {
   subjects: { name: string; chapters: string[] }[];
 };
 
+const DEFAULT_DUE = new Date(Date.now() + 7 * 864e5)
+  .toISOString()
+  .slice(0, 10);
+
 export function ActivityCreateForm({ classes }: { classes: ClassOption[] }) {
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const current = classes.find((c) => c.id === classId);
@@ -74,7 +78,7 @@ export function ActivityCreateForm({ classes }: { classes: ClassOption[] }) {
           type="date"
           name="dueDate"
           required
-          defaultValue={new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)}
+          defaultValue={DEFAULT_DUE}
           className={inputCls}
         />
       </div>

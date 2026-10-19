@@ -31,6 +31,8 @@ import {
 
 export const metadata = { title: "Student dashboard" };
 
+const NOW = Date.now();
+
 const REC_TONE: Record<string, "brand" | "danger" | "warning" | "success" | "info"> = {
   SUBJECT_SUPPORT: "warning",
   DECLINE: "danger",
@@ -233,7 +235,7 @@ export default async function StudentDashboardPage() {
           />
           <ul className="space-y-2 p-4">
             {pulse.pendingHw.slice(0, 4).map((s) => {
-              const overdue = s.homework.dueDate.getTime() < Date.now();
+              const overdue = s.homework.dueDate.getTime() < NOW;
               return (
                 <li
                   key={s.id}

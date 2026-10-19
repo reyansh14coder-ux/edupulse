@@ -72,6 +72,13 @@ export default async function StudentProfilePage({
     });
     if (!link) notFound();
   }
+  if (session.role === "TEACHER") {
+    const teaches = await db.teacherAssignment.findFirst({
+      where: { teacherId: session.sub, classId: student.schoolClass.id },
+      select: { id: true },
+    });
+    if (!teaches) notFound();
+  }
 
   const [pulse, recommendations, attempts, activities, assessments, guidance, sessions] =
     await Promise.all([

@@ -14,6 +14,8 @@ const KIND_TONE: Record<string, "brand" | "info" | "warning"> = {
   PROJECT: "warning",
 };
 
+const NOW = Date.now();
+
 export default async function StudentHomeworkPage() {
   const session = await requireSession(["STUDENT"]);
   const student = await db.student.findUnique({
@@ -31,11 +33,10 @@ export default async function StudentHomeworkPage() {
   });
   if (!student) notFound();
 
-  const now = Date.now();
   const rows = student.submissions.map((s) => ({
     ...s,
     overdue:
-      s.status === "PENDING" && s.homework.dueDate.getTime() < now,
+      s.status === "PENDING" && s.homework.dueDate.getTime() < NOW,
   }));
 
   const pending = rows.filter((r) => r.status === "PENDING");

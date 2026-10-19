@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-
-const SESSION_COOKIE = "Vidyora_session";
+import {
+  SESSION_COOKIE,
+  SESSION_SECRET_FALLBACK,
+} from "@/lib/session-constants";
 
 const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "Vidyora-dev-secret-change-in-production"
+  process.env.SESSION_SECRET || SESSION_SECRET_FALLBACK
 );
 
 function homeFor(role: string) {

@@ -105,11 +105,29 @@ export async function ensureRecommendations(studentId: string, force = false) {
     Date.now() - existing[0].updatedAt.getTime() < 48 * 3600 * 1000;
   if (fresh && !force) return existing;
 
+  const carriedPlans = new Map<
+    string,
+    { plan: string; planStatus: string }
+  >();
+  for (const r of existing) {
+    if (r.plan && r.planStatus !== "NONE" && !carriedPlans.has(r.kind)) {
+      carriedPlans.set(r.kind, { plan: r.plan, planStatus: r.planStatus });
+    }
+  }
+
   if (existing.length) await db.recommendation.deleteMany({ where: { studentId } });
   const recs = await buildRecommendations(studentId);
   if (recs.length) {
     await db.recommendation.createMany({
-      data: recs.map((r) => ({ ...r, studentId })),
+      data: recs.map((r) => {
+        const carry = carriedPlans.get(r.kind);
+        return {
+          ...r,
+          studentId,
+          plan: carry?.plan ?? null,
+          planStatus: carry?.planStatus ?? "NONE",
+        };
+      }),
     });
   }
   return db.recommendation.findMany({

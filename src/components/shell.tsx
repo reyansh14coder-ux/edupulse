@@ -133,7 +133,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-line bg-card lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col border-r border-line bg-card lg:flex">
         <div className="flex items-center gap-2.5 px-5 pb-5 pt-6">
           <Logo />
           <div>
@@ -182,7 +182,7 @@ export function AppShell({
       </aside>
 
       <div className="lg:pl-[264px]">
-        <header className="glass sticky top-0 z-30 border-b border-line">
+        <header className="glass no-print sticky top-0 z-30 border-b border-line">
           <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 lg:hidden">
               <Logo className="h-8 w-8" />

@@ -167,3 +167,18 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  div.lg\:pl-\[264px\] {
+    padding-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}

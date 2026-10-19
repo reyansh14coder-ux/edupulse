@@ -1,8 +1,12 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
+import {
+  SESSION_COOKIE,
+  SESSION_SECRET_FALLBACK,
+} from "@/lib/session-constants";
 
-export const SESSION_COOKIE = "Vidyora_session";
+export { SESSION_COOKIE };
 
 export type Role = "ADMIN" | "TEACHER" | "PARENT" | "STUDENT";
 
@@ -15,7 +19,7 @@ export type Session = {
 };
 
 const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "Vidyora-dev-secret-change-in-production"
+  process.env.SESSION_SECRET || SESSION_SECRET_FALLBACK
 );
 
 export function homeFor(role: Role) {
