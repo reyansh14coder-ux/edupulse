@@ -1,5 +1,5 @@
-const BASE = "https://generativelanguage.googleapis.com/v1beta";
-const MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash"] as const;
+const BASE = "https://api.groq.com/openai/v1";
+const MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"] as const;
 
 export type GeminiCallOptions = {
   prompt: string;
@@ -18,7 +18,7 @@ type AttemptResult = { status: number; body: string };
 const cache = new Map<string, { value: unknown; exp: number }>();
 
 function apiKey(): string | null {
-  const key = process.env.GEMINI_API_KEY?.trim();
+  const key = process.env.GROQ_API_KEY?.trim();
   return key ? key : null;
 }
 
@@ -48,68 +48,16 @@ async function post(
   }
 }
 
-function isAttemptError(r: AttemptResult): r is { status: number; body: string } {
-  return "status" in r;
-}
-
-function deepCollectText(node: unknown, out: string[], depth = 0): void {
-  if (depth > 8 || node == null) return;
-  if (typeof node === "string") return;
-  if (Array.isArray(node)) {
-    for (const item of node) deepCollectText(item, out, depth + 1);
-    return;
-  }
-  if (typeof node !== "object") return;
-  const obj = node as Record<string, unknown>;
-  if (obj.thought === true) return;
-  for (const key of ["text", "output_text", "outputText"]) {
-    const v = obj[key];
-    if (typeof v === "string" && v.trim()) {
-      out.push(v);
-      return;
-    }
-  }
-  for (const value of Object.values(obj)) deepCollectText(value, out, depth + 1);
-}
-
-function extractGenerateContentText(data: unknown): string | null {
-  const d = data as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-      text?: string;
-    }>;
-    promptFeedback?: { blockReason?: string };
-  };
-  const cand = d?.candidates?.[0];
-  if (cand?.content?.parts?.length) {
-    const t = cand.content.parts
-      .filter((p) => !p.thought && typeof p.text === "string")
-      .map((p) => p.text)
-      .join("");
-    if (t.trim()) return t;
-  }
-  if (cand?.text?.trim()) return cand.text;
-  return null;
-}
-
-function extractInteractionsText(data: unknown): string | null {
-  const d = data as { output_text?: unknown; outputText?: unknown };
-  for (const v of [d?.output_text, d?.outputText]) {
-    if (typeof v === "string" && v.trim()) return v;
-  }
-  const parts: string[] = [];
-  deepCollectText(data, parts);
-  const t = parts.join("").trim();
-  return t || null;
-}
-
 async function withRetries(
   fn: () => Promise<AttemptResult>,
   retries: number
 ): Promise<AttemptResult> {
   let result = await fn();
   for (let i = 0; i < retries; i++) {
-    if (isAttemptError(result) && (result.status === 0 || result.status >= 500 || result.status === 429)) {
+    if (
+      isAttemptError(result) &&
+      (result.status === 0 || result.status >= 500 || result.status === 429)
+    ) {
       await new Promise((r) => setTimeout(r, 700));
       result = await fn();
     } else break;
@@ -117,55 +65,44 @@ async function withRetries(
   return result;
 }
 
-async function viaGenerateContent(
-  model: string,
-  opts: GeminiCallOptions,
-  key: string
-): Promise<AttemptResult> {
-  const generationConfig: Record<string, unknown> = {
-    temperature: opts.temperature ?? 0.6,
-    maxOutputTokens: opts.maxTokens ?? 1200,
-  };
-  if (opts.json) generationConfig.responseMimeType = "application/json";
-  const body: Record<string, unknown> = {
-    contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
-    generationConfig,
-  };
-  if (opts.system) {
-    body.systemInstruction = { parts: [{ text: opts.system }] };
-  }
-  const timeout = opts.timeoutMs ?? 6000;
-  return post(`${BASE}/models/${model}:generateContent?key=${key}`, {}, body, timeout);
+function isAttemptError(r: AttemptResult): r is { status: number; body: string } {
+  return "status" in r;
 }
 
-async function viaInteractions(
+async function viaChat(
   model: string,
   opts: GeminiCallOptions,
   key: string
 ): Promise<AttemptResult> {
-  const generation_config: Record<string, unknown> = {
-    temperature: opts.temperature ?? 0.6,
-    max_output_tokens: opts.maxTokens ?? 1200,
-  };
-  if (opts.json) generation_config.response_mime_type = "application/json";
+  const isReasoning = model.includes("gpt-oss");
+  const baseTokens = opts.maxTokens ?? 1200;
   const body: Record<string, unknown> = {
     model,
-    input: opts.prompt,
-    generation_config,
-    store: false,
+    messages: [
+      ...(opts.system ? [{ role: "system", content: opts.system }] : []),
+      { role: "user", content: opts.prompt },
+    ],
+    temperature: opts.temperature ?? 0.6,
+    max_tokens: isReasoning ? baseTokens + 512 : baseTokens,
   };
-  if (opts.system) body.system_instruction = { parts: [{ text: opts.system }] };
+  if (opts.json) body.response_format = { type: "json_object" };
+  if (isReasoning) body.reasoning_effort = "low";
   const timeout = opts.timeoutMs ?? 6000;
-  return post(`${BASE}/interactions`, { "x-goog-api-key": key }, body, timeout);
+  return post(`${BASE}/chat/completions`, { Authorization: `Bearer ${key}` }, body, timeout);
+}
+
+function extractChatText(data: unknown): string | null {
+  const d = data as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const c = d?.choices?.[0]?.message?.content;
+  if (typeof c === "string" && c.trim()) return c;
+  return null;
 }
 
 function parsed(data: unknown): string | null {
   if (typeof data !== "object" || data == null) return null;
-  const gen = extractGenerateContentText(data);
-  const inter = extractInteractionsText(data);
-  const text = (gen && gen.length >= (inter?.length ?? 0) ? gen : inter) ?? null;
-  if (!text) return null;
-  return text;
+  return extractChatText(data);
 }
 
 /** Returns raw model text, or null on any failure (missing key, denial, timeout, bad shape). */
@@ -179,17 +116,15 @@ export async function callGeminiText(opts: GeminiCallOptions): Promise<string | 
   }
 
   const retries = opts.retries ?? 0;
-  const attempts: Array<() => Promise<AttemptResult>> = [];
-  for (const m of MODELS) attempts.push(() => viaGenerateContent(m, opts, key));
-  for (const m of MODELS) attempts.push(() => viaInteractions(m, opts, key));
 
-  for (const run of attempts) {
-    const result = await withRetries(run, retries);
+  for (const m of MODELS) {
+    const result = await withRetries(() => viaChat(m, opts, key), retries);
+    if (result.status === 401 || result.status === 403) {
+      console.warn(`[llm] blocked (${result.status})`);
+      return null;
+    }
     if (result.status !== 200) {
-      if (result.status === 403 || result.status === 401 || result.status === 400) {
-        console.warn(`[gemini] blocked (${result.status})`);
-        return null;
-      }
+      console.warn(`[llm] model ${m} failed (${result.status})`);
       continue;
     }
     let data: unknown;
@@ -209,7 +144,7 @@ export async function callGeminiText(opts: GeminiCallOptions): Promise<string | 
       return text;
     }
   }
-  console.warn("[gemini] no usable response");
+  console.warn("[llm] no usable response");
   return null;
 }
 
@@ -237,7 +172,7 @@ export async function callGeminiJSON<T>(
   try {
     data = JSON.parse(stripFences(text));
   } catch {
-    console.warn("[gemini] invalid JSON in response");
+    console.warn("[llm] invalid JSON in response");
     return null;
   }
   const value = validate ? validate(data) : (data as T);
