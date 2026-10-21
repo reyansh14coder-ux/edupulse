@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { studentPulse } from "@/lib/insights";
-import { BANK, SYLLABUS, type BankQuestion } from "@/lib/question-bank";
+import { learningGaps } from "@/lib/gaps";
+import { BANK, SUBJECTS, SYLLABUS, type BankQuestion } from "@/lib/question-bank";
+import { callGeminiJSON } from "@/lib/gemini";
 
 type NewRec = {
   kind: string;
@@ -92,7 +94,74 @@ export async function buildRecommendations(studentId: string): Promise<NewRec[]>
     });
   }
 
-  return recs.slice(0, 6);
+  const picked = recs.slice(0, 6);
+  return enrichRecBodies(studentId, pulse, picked);
+}
+
+async function enrichRecBodies(
+  studentId: string,
+  pulse: NonNullable<Awaited<ReturnType<typeof studentPulse>>>,
+  recs: NewRec[]
+): Promise<NewRec[]> {
+  if (!recs.length) return recs;
+  const gaps = await learningGaps(studentId);
+
+  const data = {
+    firstName: pulse.student.user.name.split(" ")[0],
+    overallPercent: Math.round(pulse.overall),
+    attendancePercent: Math.round(pulse.attendancePct),
+    subjects: pulse.subjects.map((s) => ({
+      subject: s.subject,
+      average: Math.round(s.avg),
+      trend: Math.round(s.trend),
+    })),
+    weakChapters: gaps.weak
+      .slice(0, 3)
+      .map((g) => `${g.subject}: ${g.chapter} (${Math.round(g.pct)}%)`),
+    overdueHomework: pulse.overdueHw.map(
+      (h) => `${h.homework.title} (${h.homework.subject})`
+    ),
+    recentAbsences: pulse.recentAbsents.length,
+  };
+
+  const system =
+    "You write recommendation bodies shown to a school student and their teacher on Vidyora. " +
+    "For EACH detected recommendation, write a grounded, specific, encouraging 45-75 word paragraph: what the data shows, why it matters, and exactly what to do next. " +
+    "Warm coaching tone — never label the child as weak or failing. English only. No lists, no headers, no markdown.";
+
+  const prompt = `Student data (JSON): ${JSON.stringify(data)}
+
+Detected recommendations — keep EXACTLY this order and refer to each one's topic:
+${JSON.stringify(
+  recs.map((r, i) => ({ i, kind: r.kind, title: r.title, context: r.context ?? null }))
+)}
+
+Return ONLY: {"bodies":["..."]} with exactly ${recs.length} strings.`;
+
+  const bodies = await callGeminiJSON<string[]>(
+    {
+      prompt,
+      system,
+      json: true,
+      temperature: 0.6,
+      maxTokens: 900,
+      timeoutMs: 5000,
+      retries: 0,
+      cacheKey: `recbodies:${studentId}:${recs.map((r) => r.kind).join(",")}`,
+      cacheTtlMs: 4 * 3600_000,
+    },
+    (v) => {
+      const b = (v as { bodies?: unknown })?.bodies;
+      if (!Array.isArray(b) || b.length !== recs.length) return null;
+      const out = b.map((x) =>
+        typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, 540) : ""
+      );
+      return out.every(Boolean) ? out : null;
+    }
+  );
+
+  if (!bodies) return recs;
+  return recs.map((r, i) => ({ ...r, body: bodies[i] }));
 }
 
 export async function ensureRecommendations(studentId: string, force = false) {
@@ -145,22 +214,108 @@ export function pickQuizQuestions(subject: string, chapter?: string | null) {
   return ordered.slice(0, 5);
 }
 
+function clean(v: unknown, max: number): string {
+  return typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function validateAiQuiz(
+  v: unknown,
+  subject: string,
+  chapter: string | null
+): BankQuestion[] | null {
+  const rows = (v as { questions?: unknown })?.questions;
+  if (!Array.isArray(rows)) return null;
+  const out: BankQuestion[] = [];
+  for (const raw of rows.slice(0, 7)) {
+    const r = raw as { q?: unknown; options?: unknown; answer?: unknown; chapter?: unknown };
+    const q = clean(r.q, 240);
+    const options = Array.isArray(r.options)
+      ? r.options.map((o) => clean(o, 130))
+      : [];
+    const answer = r.answer;
+    if (!q || options.length !== 4 || options.some((o) => !o)) continue;
+    if (new Set(options.map((o) => o.toLowerCase())).size !== 4) continue;
+    if (typeof answer !== "number" || !Number.isInteger(answer) || answer < 0 || answer > 3)
+      continue;
+    const ch = clean(r.chapter, 60) || chapter || "General";
+    out.push({ chapter: ch, q, options, answer });
+    if (out.length === 5) break;
+  }
+  return out.length === 5 ? out : null;
+}
+
+export async function aiQuizQuestions(
+  subject: string,
+  chapter: string | null,
+  classLabel: string | null,
+  hints: string[] = []
+): Promise<BankQuestion[] | null> {
+  if (!(SUBJECTS as readonly string[]).includes(subject)) return null;
+  const chapters = SYLLABUS[subject] ?? [];
+
+  const system =
+    "You are an assessment writer for Indian CBSE-style schools (classes 6-9). " +
+    "Write accurate, unambiguous multiple-choice questions a school teacher would approve. " +
+    "Reply with ONLY a JSON object, no markdown.";
+
+  const prompt = [
+    `Class: ${classLabel || "Class 6-9"}. Subject: ${subject}.`,
+    chapter
+      ? `Target chapter/topic: "${chapter}". Every question must be about it.`
+      : `Cover these syllabus chapters across the 5 questions: ${chapters.join(", ")}.`,
+    hints.length
+      ? `The student recently missed questions on: ${hints.join(" | ")}. Include 1-2 questions probing exactly those skills.`
+      : "",
+    "Level: moderate mix (3 straightforward, 2 slightly tricky). All in English"
+      .concat(subject === "Hindi" ? " EXCEPT the questions themselves, which must be in Hindi." : "."),
+    "4 distinct options each (no 'All of these'), exactly one correct.",
+    'Return: {"questions":[{"chapter":"...","q":"...","options":["...","...","...","..."],"answer":0}]} with EXACTLY 5 questions; answer is the 0-based index of the correct option.',
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return callGeminiJSON(
+    {
+      prompt,
+      system,
+      json: true,
+      temperature: 0.7,
+      maxTokens: 1200,
+      timeoutMs: 5000,
+      retries: 0,
+    },
+    (v) => validateAiQuiz(v, subject, chapter)
+  );
+}
+
 export async function createClassQuiz(input: {
   classId: string;
   subject: string;
   chapter?: string | null;
   createdById?: string;
+  hints?: string[];
 }) {
-  const questions: BankQuestion[] = pickQuizQuestions(input.subject, input.chapter);
-  const title = input.chapter
-    ? `${input.subject} – ${input.chapter} (Practice Quiz)`
+  const chapter = input.chapter ?? null;
+  const cls = await db.schoolClass.findUnique({
+    where: { id: input.classId },
+    select: { name: true },
+  });
+  const aiQs = await aiQuizQuestions(
+    input.subject,
+    chapter,
+    cls?.name ?? null,
+    input.hints ?? []
+  );
+  const questions: BankQuestion[] = aiQs ?? pickQuizQuestions(input.subject, chapter);
+  const title = chapter
+    ? `${input.subject} – ${chapter} (Practice Quiz)`
     : `${input.subject} – AI Practice Quiz`;
   return db.quiz.create({
     data: {
       title,
       classId: input.classId,
       subject: input.subject,
-      chapter: input.chapter ?? null,
+      chapter: chapter,
       questions: JSON.stringify(questions),
       createdById: input.createdById ?? null,
     },
@@ -181,14 +336,20 @@ export async function createPracticeQuizForStudent(studentId: string) {
     gaps.weakest?.chapter ??
     null;
 
+  const hints = gaps.chapters
+    .filter((c) => c.subject === weakest && (!weakChapter || c.chapter === weakChapter))
+    .flatMap((c) => c.wrong.map((w) => w.q))
+    .slice(0, 3);
+
   return createClassQuiz({
     classId: pulse.student.classId,
     subject: weakest,
     chapter: weakChapter,
+    hints,
   });
 }
 
-export function draftPlan(rec: {
+function draftPlanLocal(rec: {
   kind: string;
   title: string;
   body: string;
@@ -243,4 +404,56 @@ export function draftPlan(rec: {
         focus,
       ].join("\n");
   }
+}
+
+export async function draftPlan(rec: {
+  kind: string;
+  title: string;
+  body: string;
+  context?: string | null;
+}): Promise<string> {
+  const fallback = draftPlanLocal(rec);
+
+  const system =
+    "You draft a short next-step study plan that a teacher will review and approve on Vidyora. " +
+    "Write 4-5 concrete steps a student can complete within one week, specific to this recommendation and the given data. " +
+    "Warm, encouraging, plain English. No markdown, no headers.";
+
+  const prompt = `Recommendation (JSON): ${JSON.stringify({
+    kind: rec.kind,
+    title: rec.title,
+    context: rec.context ?? null,
+    summary: rec.body.slice(0, 400),
+  })}
+
+Return ONLY: {"steps":["..."]} with 4-5 short action strings (each under 160 chars).`;
+
+  const steps = await callGeminiJSON<string[]>(
+    {
+      prompt,
+      system,
+      json: true,
+      temperature: 0.5,
+      maxTokens: 700,
+      timeoutMs: 5000,
+      retries: 0,
+      cacheKey: `plan:${rec.kind}:${rec.title.slice(0, 48)}`,
+      cacheTtlMs: 4 * 3600_000,
+    },
+    (v) => {
+      const s = (v as { steps?: unknown })?.steps;
+      if (!Array.isArray(s)) return null;
+      const out = s
+        .map((x) =>
+          typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, 240) : ""
+        )
+        .filter(Boolean)
+        .slice(0, 6);
+      return out.length >= 3 ? out : null;
+    }
+  );
+
+  if (!steps) return fallback;
+  const numbered = steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+  return rec.context ? `${numbered}\nFocus topic: ${rec.context}.` : numbered;
 }

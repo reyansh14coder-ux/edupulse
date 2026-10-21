@@ -14,9 +14,11 @@ import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { learningGaps } from "@/lib/gaps";
 import { improveFor } from "@/lib/improve";
-import { progressTimeline } from "@/lib/insights";
+import { progressTimeline, studentPulse } from "@/lib/insights";
+import { SUBJECTS } from "@/lib/question-bank";
 import { ensureRecommendations } from "@/lib/ai";
 import { fmtDate } from "@/lib/utils";
+import { SubjectDive } from "@/components/dive-deeper";
 import {
   addGoalAction,
   reflectAction,
@@ -52,7 +54,7 @@ export default async function StudentPlanPage() {
   });
   if (!student) notFound();
 
-  const [gaps, recs, goals, timeline] = await Promise.all([
+  const [gaps, recs, goals, timeline, pulse] = await Promise.all([
     learningGaps(student.id),
     ensureRecommendations(student.id),
     db.studentGoal.findMany({
@@ -60,7 +62,27 @@ export default async function StudentPlanPage() {
       orderBy: { updatedAt: "desc" },
     }),
     progressTimeline(student.id, 14),
+    studentPulse(student.id),
   ]);
+
+  const subjectRows = SUBJECTS.map((name) => {
+    const stat = pulse?.subjects.find((s) => s.subject === name) ?? null;
+    const chs = gaps.chapters.filter((c) => c.subject === name);
+    const weak = chs.filter((c) => c.severity !== "strong");
+    const summary = !stat
+      ? `No ${name} scores yet — attempt your first ${name} quiz and your analysis will appear here.`
+      : stat.avg >= 75
+        ? `Going well at ${Math.round(stat.avg)}% — maintain your routine and aim for mastery.`
+        : `At ${Math.round(stat.avg)}% across ${stat.count} assessment${stat.count > 1 ? "s" : ""} — focused work on ${weak[0]?.chapter ?? "one chapter"} will move you to the next level.`;
+    return {
+      name,
+      avg: stat ? Math.round(stat.avg) : null,
+      count: stat?.count ?? 0,
+      trend: stat?.trend ?? 0,
+      weak: weak.slice(0, 3).map((w) => ({ chapter: w.chapter, pct: w.pct })),
+      summary,
+    };
+  });
 
   const approved = recs.filter((r) => r.planStatus === "APPROVED" && r.plan);
   const activeGoals = goals.filter((g) => g.kind === "GOAL" && g.status === "ACTIVE");
@@ -83,11 +105,37 @@ export default async function StudentPlanPage() {
         <div className="space-y-5 lg:col-span-2">
           <Card>
             <CardHeader
+              title="Subject-wise AI recommendations"
+              sub="Where you stand in every subject, what to focus next, and a deeper AI analysis on demand"
+              action={
+                <Badge tone="brand">
+                  <Sparkles size={11} /> {subjectRows.filter((r) => r.avg !== null).length}/
+                  {SUBJECTS.length} active
+                </Badge>
+              }
+            />
+            <div className="space-y-3 p-5 pt-4">
+              {subjectRows.map((r) => (
+                <SubjectDive
+                  key={r.name}
+                  subject={r.name}
+                  summary={r.summary}
+                  avg={r.avg}
+                  count={r.count}
+                  trend={r.trend}
+                  weak={r.weak}
+                />
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Learning gap detector"
-              sub="Chapter-wise accuracy from your quiz attempts — weakest first"
+              sub="Chapter-wise accuracy from your quiz attempts — focus chapters first"
               action={
                 <Badge tone={gaps.weak.length ? "danger" : "success"}>
-                  {gaps.weak.length} weak chapter{gaps.weak.length === 1 ? "" : "s"}
+                  {gaps.weak.length} chapter{gaps.weak.length === 1 ? "" : "s"} to revisit
                 </Badge>
               }
             />
@@ -116,7 +164,7 @@ export default async function StudentPlanPage() {
                         <td className="px-4 py-2.5">
                           <Badge tone={SEVERITY_TONE[c.severity]}>
                             {c.severity === "weak"
-                              ? "Gap"
+                              ? "Focus"
                               : c.severity === "review"
                                 ? "Review"
                                 : "Strong"}
@@ -153,7 +201,7 @@ export default async function StudentPlanPage() {
           <Card>
             <CardHeader
               title="How to improve your gaps"
-              sub="Tricks, question types to practise and an explanation video for each weak chapter"
+              sub="Tricks, question types to practise and an explanation video for each focus chapter"
               action={
                 <Badge tone="warning">
                   {gaps.weak.length
@@ -172,7 +220,7 @@ export default async function StudentPlanPage() {
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={SEVERITY_TONE[g.severity]}>
-                        {g.severity === "weak" ? "Gap" : "Review"}
+                        {g.severity === "weak" ? "Focus" : "Review"}
                       </Badge>
                       <p className="font-display text-[14.5px] font-extrabold text-ink-900">
                         {g.subject} — {g.chapter}
@@ -263,7 +311,7 @@ export default async function StudentPlanPage() {
               })}
               {!gaps.weak.length && (
                 <EmptyState
-                  title="No weak chapters — great work!"
+                  title="Every chapter is on track — great work!"
                   hint="Once you attempt chapter-wise quizzes, personalised improvement plans with tricks, practice sets and videos will appear here."
                   icon={<CheckCircle2 size={20} />}
                 />
@@ -467,7 +515,7 @@ export default async function StudentPlanPage() {
           <Card>
             <CardHeader
               title="Practice smarter"
-              sub="AI quiz targeted at your weakest chapter"
+               sub="AI quiz for your focus chapter"
             />
             <div className="p-5 pt-3">
               <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 p-4 text-white">
@@ -478,7 +526,7 @@ export default async function StudentPlanPage() {
                 </p>
                 <p className="mt-1 text-[12.5px] text-white/75">
                   {gaps.weakest
-                    ? `Accuracy ${Math.round(gaps.weakest.pct)}% here — practising now closes the fastest.`
+                    ? `Accuracy ${Math.round(gaps.weakest.pct)}% here — practising this first moves you up fastest.`
                     : "Generated from your marks and gaps, adds to progress history."}
                 </p>
                 <div className="mt-3">

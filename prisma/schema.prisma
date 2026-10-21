@@ -23,6 +23,7 @@ model User {
   guided         GuidanceNote[]      @relation("guideAuthor")
   counseling     CounselingSession[] @relation("counselor")
   homeworks      Homework[]
+  interventions  StudentIntervention[] @relation("interventionAuthor")
 }
 
 model SchoolClass {
@@ -69,6 +70,8 @@ model Student {
   attempts      QuizAttempt[]
   recommendations Recommendation[]
   goals         StudentGoal[]
+  voices        StudentVoice[]
+  interventions StudentIntervention[]
 }
 
 model ParentLink {
@@ -232,12 +235,36 @@ model GuidanceNote {
 }
 
 model CounselingSession {
-  id           String   @id @default(cuid())
-  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId    String
-  counselor    User     @relation("counselor", fields: [counselorId], references: [id], onDelete: Cascade)
+  counselor    User      @relation("counselor", fields: [counselorId], references: [id], onDelete: Cascade)
   counselorId  String
   scheduledFor DateTime
   status       String
   notes        String?
 }
+
+model StudentVoice {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  mood      String
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model StudentIntervention {
+  id          String    @id @default(cuid())
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  createdBy   User      @relation("interventionAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  title       String
+  note        String?
+  status      String    @default("ACTIVE")
+  outcome     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+

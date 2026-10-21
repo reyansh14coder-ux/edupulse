@@ -1,30 +1,69 @@
+function sparkle(cx: number, cy: number, r: number) {
+  return [
+    `M ${cx} ${cy - r}`,
+    `Q ${cx} ${cy} ${cx + r} ${cy}`,
+    `Q ${cx} ${cy} ${cx} ${cy + r}`,
+    `Q ${cx} ${cy} ${cx - r} ${cy}`,
+    `Q ${cx} ${cy} ${cx} ${cy - r}`,
+    "Z",
+  ].join(" ");
+}
+
 export function Logo({ className = "h-9 w-9" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
       <defs>
-        <linearGradient id="epGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#4f46e5" />
-          <stop offset="100%" stopColor="#7c3aed" />
+        <linearGradient id="vdyBlue" x1="16" y1="13" x2="30" y2="52" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#38BDF8" />
+          <stop offset="1" stopColor="#1D4ED8" />
+        </linearGradient>
+        <linearGradient id="vdyGreen" x1="48" y1="13" x2="34" y2="52" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#6EE7B7" />
+          <stop offset="1" stopColor="#16A34A" />
         </linearGradient>
       </defs>
-      <rect width="48" height="48" rx="14" fill="url(#epGrad)" />
+
+      {/* V ribbons — blue (left) and green (right) */}
       <path
-        d="M10 25.5h6.5l3-7.5 5 15 3.5-9 2.5 4.5H38"
+        d="M15.5 17 Q17.5 37 31.6 52.6"
         fill="none"
-        stroke="#fff"
-        strokeWidth="3.2"
+        stroke="url(#vdyBlue)"
+        strokeWidth="10.5"
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <circle cx="38" cy="23" r="3.4" fill="#fbbf24" />
+      <path
+        d="M48.5 17 Q46.5 37 32.4 52.6"
+        fill="none"
+        stroke="url(#vdyGreen)"
+        strokeWidth="10.5"
+        strokeLinecap="round"
+      />
+
+      {/* graduation cap */}
+      <path d="M32 14.2 L47 20.6 L32 27 L17 20.6 Z" fill="#1B2A6B" />
+      <path d="M24.5 24.4 v5.2 c0 3 3.4 5 7.5 5 s7.5-2 7.5-5 v-5.2 l-7.5 3.2 Z" fill="#16255E" />
+      <path d="M47 20.6 v8.6" stroke="#1B2A6B" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx="47" cy="31.6" r="2.7" fill="#F59E0B" />
+
+      {/* sparkles */}
+      <path d={sparkle(22.5, 33.5, 3.4)} fill="#2DD4BF" />
+      <path d={sparkle(51.5, 9.9, 4.4)} fill="#FBBF24" />
     </svg>
   );
 }
 
-export function Wordmark() {
+export function Wordmark({ tagline = false }: { tagline?: boolean }) {
   return (
-    <span className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
-      Vidy<span className="gradient-text">ora</span>
+    <span className="flex flex-col leading-none">
+      <span className="font-display text-[17px] font-extrabold tracking-tight text-[#16255E]">
+        Vidy<span className="gradient-text">ora</span>
+      </span>
+      {tagline && (
+        <span className="mt-1 text-[8.5px] font-bold tracking-[0.2em] text-[#16255E]/75">
+          LEARN<span className="text-sky-500"> • </span>GROW
+          <span className="text-emerald-500"> • </span>ACHIEVE
+        </span>
+      )}
     </span>
   );
 }

@@ -69,7 +69,7 @@ export default function Home() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
           <div className="flex items-center gap-2.5">
             <Logo />
-            <Wordmark />
+            <Wordmark tagline />
           </div>
           <nav className="hidden items-center gap-7 text-[13.5px] font-bold text-ink-600 md:flex">
             <a href="#loop" className="transition hover:text-brand-600">How it works</a>

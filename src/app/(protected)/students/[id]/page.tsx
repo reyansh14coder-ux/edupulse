@@ -17,6 +17,7 @@ import { planFormAction } from "@/app/actions/plan";
 import { fmtDate, pct } from "@/lib/utils";
 import { AttendanceDonut, SubjectBars, TrendArea } from "@/components/charts";
 import { refreshRecommendationsAction } from "@/app/actions/recommend";
+import { InterventionPanel } from "@/components/intervention-panel";
 import {
   Avatar,
   Badge,
@@ -80,7 +81,7 @@ export default async function StudentProfilePage({
     if (!teaches) notFound();
   }
 
-  const [pulse, recommendations, attempts, activities, assessments, guidance, sessions] =
+  const [pulse, recommendations, attempts, activities, assessments, guidance, sessions, interventions] =
     await Promise.all([
       studentPulse(id),
       ensureRecommendations(id),
@@ -114,6 +115,12 @@ export default async function StudentProfilePage({
         orderBy: { scheduledFor: "desc" },
         take: 5,
       }),
+      db.studentIntervention.findMany({
+        where: { studentId: id },
+        include: { createdBy: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+      }),
     ]);
   if (!pulse) notFound();
 
@@ -126,6 +133,13 @@ export default async function StudentProfilePage({
 
   const canPlan =
     session.role === "TEACHER" || session.role === "ADMIN";
+
+  const planDefaults = new Map<string, string>();
+  if (canPlan) {
+    for (const r of recommendations) {
+      planDefaults.set(r.id, r.plan ?? (await draftPlan(r)));
+    }
+  }
 
   const backHref =
     session.role === "ADMIN"
@@ -290,7 +304,7 @@ export default async function StudentProfilePage({
                   <textarea
                     name="plan"
                     rows={5}
-                    defaultValue={r.plan ?? draftPlan(r)}
+                    defaultValue={planDefaults.get(r.id)}
                     className={`${inputCls} font-mono text-[12.5px] leading-relaxed`}
                   />
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -497,6 +511,29 @@ export default async function StudentProfilePage({
               )}
             </ul>
           </Card>
+
+          {canPlan && (
+            <Card>
+              <CardHeader
+                title="Support steps"
+                sub="Log what you try with this student, then record whether it helped"
+                action={<Badge tone="info">{interventions.length}</Badge>}
+              />
+              <InterventionPanel
+                studentId={student.id}
+                canEdit
+                items={interventions.map((i) => ({
+                  id: i.id,
+                  title: i.title,
+                  note: i.note,
+                  status: i.status,
+                  outcome: i.outcome,
+                  createdByName: i.createdBy.name,
+                  createdAt: fmtDate(i.createdAt),
+                }))}
+              />
+            </Card>
+          )}
         </div>
       </div>
     </div>

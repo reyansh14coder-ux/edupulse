@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { isoDate } from "@/lib/utils";
 import { REPORT_COPY, localeOf, type Lang } from "@/lib/report-i18n";
 import { learningGaps } from "@/lib/gaps";
+import { callGeminiJSON } from "@/lib/gemini";
 
 export type SubjectStat = {
   subject: string;
@@ -752,6 +753,60 @@ export async function weeklyReport(
     })),
   ].slice(0, 4);
 
+  const localeName = lang === "hi" ? "Hindi" : lang === "mr" ? "Marathi" : "English";
+  let studies = generalStudies;
+  let advice = generalAdvice;
+  const aiGen = await callGeminiJSON<{ studies: string; advice: string }>(
+    {
+      prompt: `Parent weekly report data (JSON): ${JSON.stringify({
+        child: student.user.name.split(" ")[0],
+        overallPercent: Math.round(overall),
+        weekAverage: weekAvg !== null ? Math.round(weekAvg) : null,
+        changeVsLastWeek: delta !== null ? Math.round(delta) : null,
+        attendancePercent: Math.round(attPct),
+        highlights,
+        concerns,
+        focusAreas,
+        subjects: subjectRows.map((s) => ({
+          subject: s.subject,
+          average: Math.round(s.avg),
+          trend: Math.round(s.trend),
+          focusChapters: s.weakChapters,
+        })),
+      })}
+
+Return ONLY {"studies":"...","advice":"..."}.`,
+      system:
+        `You write the parent-facing part of Vidyora's weekly school report in ${localeName}. ` +
+        `"studies": 2-3 warm, factual sentences summarising this week's learning. ` +
+        `"advice": ONE specific doable action for the parent to do WITH the child THIS WEEK — 10-15 minutes, 2-3 times, naming a topic from the data, plus one encouraging question to ask (like "explain it your way"). ` +
+        "Supportive and realistic; never alarming, never labelling the child. No markdown, plain text only.",
+      json: true,
+      temperature: 0.6,
+      maxTokens: 500,
+      timeoutMs: 5000,
+      retries: 0,
+      cacheKey: `rsum:${studentId}:${lang}`,
+      cacheTtlMs: 30 * 60_000,
+    },
+    (v) => {
+      const o = v as { studies?: unknown; advice?: unknown };
+      const s =
+        typeof o?.studies === "string"
+          ? o.studies.replace(/\s+/g, " ").trim().slice(0, 600)
+          : "";
+      const a =
+        typeof o?.advice === "string"
+          ? o.advice.replace(/\s+/g, " ").trim().slice(0, 600)
+          : "";
+      return s.length >= 60 && a.length >= 60 ? { studies: s, advice: a } : null;
+    }
+  );
+  if (aiGen) {
+    studies = aiGen.studies;
+    advice = aiGen.advice;
+  }
+
   return {
     periodLabel: `${monday.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${new Date(weekEnd.getTime() - 864e5).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}`,
     attendance: { present, total: weekAttendance.length, pct: attPct, absents },
@@ -771,10 +826,10 @@ export async function weeklyReport(
     weekAvg,
     plans: plans.map((p) => ({ title: p.title, plan: p.plan ?? "" })),
     general: {
-      studies: generalStudies,
+      studies,
       achievements,
       focus: focusAreas,
-      advice: generalAdvice,
+      advice,
     },
     subjects: subjectRows,
     notes: noteRows,
@@ -931,10 +986,17 @@ export type ClassInsights = {
   classAvg: number;
   attendanceAvg: number;
   subjectAvg: { subject: string; avg: number }[];
-  hardestChapters: { subject: string; chapter: string; pct: number; attempts: number }[];
+  hardestChapters: {
+    subject: string;
+    chapter: string;
+    pct: number;
+    attempts: number;
+    students: number;
+  }[];
   riskRows: { id: string; name: string; att: number; avg: number }[];
   movers: { id: string; name: string; delta: number }[];
   quizCount: number;
+  aiBrief: { summary: string; actions: string[]; source: "ai" | "local" };
 };
 
 export async function classInsights(classId: string): Promise<ClassInsights | null> {
@@ -996,7 +1058,16 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
     }
   }
 
-  const chapterMap = new Map<string, { subject: string; chapter: string; correct: number; total: number }>();
+  const chapterMap = new Map<
+    string,
+    {
+      subject: string;
+      chapter: string;
+      correct: number;
+      total: number;
+      students: Set<string>;
+    }
+  >();
   let quizCount = 0;
   for (const quiz of schoolClass.quizzes) {
     for (const attempt of quiz.attempts) {
@@ -1012,9 +1083,19 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
       questions.forEach((q, i) => {
         const chapter = q.chapter || "General";
         const key = `${quiz.subject}::${chapter}`;
-        const agg =
-          chapterMap.get(key) ?? { subject: quiz.subject, chapter, correct: 0, total: 0 };
+        let agg = chapterMap.get(key);
+        if (!agg) {
+          agg = {
+            subject: quiz.subject,
+            chapter,
+            correct: 0,
+            total: 0,
+            students: new Set<string>(),
+          };
+          chapterMap.set(key, agg);
+        }
         agg.total += 1;
+        agg.students.add(attempt.studentId);
         if (detail[i]?.correct) agg.correct += 1;
         chapterMap.set(key, agg);
       });
@@ -1028,6 +1109,7 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
       chapter: c.chapter,
       pct: Math.round((c.correct / c.total) * 100),
       attempts: c.total,
+      students: c.students.size,
     }))
     .sort((a, b) => a.pct - b.pct)
     .slice(0, 8);
@@ -1036,13 +1118,105 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
     .map(([subject, a]) => ({ subject, avg: Math.round(a.sum / a.n) }))
     .sort((a, b) => a.avg - b.avg);
 
+  const classAvg = students.length ? Math.round(avgSum / students.length) : 0;
+  const attendanceAvg = students.length ? Math.round(attSum / students.length) : 0;
+  const focusSubject = subjectAvg[0];
+  const hardest = hardestChapters[0];
+  const localBrief = {
+    summary: [
+      `${schoolClass.name} averages ${classAvg}% across ${students.length} students.`,
+      focusSubject
+        ? `${focusSubject.subject} needs the most support right now (${focusSubject.avg}% class average).`
+        : "",
+      hardest
+        ? `${hardest.chapter} (${hardest.subject}) is the weakest topic — ${hardest.pct}% correct over ${hardest.attempts} responses.`
+        : "",
+      attendanceAvg < 80 ? `Attendance at ${attendanceAvg}% is holding some learners back.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    actions: [
+      hardest
+        ? `Spend one lesson re-teaching ${hardest.chapter} before moving ahead.`
+        : "Keep the current revision cycle going.",
+      riskRows.length
+        ? `Check in supportively with ${riskRows
+            .slice(0, 2)
+            .map((r) => r.name.split(" ")[0])
+            .join(" and ")} — evidence-led, not punitive.`
+        : "No attendance-driven check-ins needed right now.",
+      focusSubject
+        ? `Run a short follow-up quiz on ${focusSubject.subject} next week to measure the gap.`
+        : "Consider a challenge quiz to stretch the class.",
+    ].slice(0, 3),
+  };
+
+  const aiResult = await callGeminiJSON<{ summary: string; actions: string[] }>(
+    {
+      prompt: `Class analytics (JSON): ${JSON.stringify({
+        className: `${schoolClass.name} (${schoolClass.section})`,
+        students: students.length,
+        classAveragePercent: classAvg,
+        attendancePercent: attendanceAvg,
+        subjectAverages: subjectAvg.slice(0, 6),
+        weakestTopics: hardestChapters.slice(0, 5),
+        needsCheckIn: riskRows.slice(0, 3).map((r) => ({
+          first: r.name.split(" ")[0],
+          attendance: r.att,
+          average: r.avg,
+        })),
+        improving: movers.slice(0, 3).map((m) => ({
+          first: m.name.split(" ")[0],
+          change: m.delta,
+        })),
+      })}
+
+Return ONLY {"summary":"...","actions":["..."]}.`,
+      system:
+        "You are Vidyora's teaching coach writing a brief for a class teacher. " +
+        "Summary: 2-3 supportive, data-grounded sentences (under 320 chars) on how the class is doing and where to focus. " +
+        "Actions: 2-4 concrete next steps for the TEACHER this week (re-teach a topic, check in with a student, plan a follow-up quiz). " +
+        "Evidence-led and encouraging — never label students or the class negatively. Plain English, no markdown.",
+      json: true,
+      temperature: 0.5,
+      maxTokens: 600,
+      timeoutMs: 5000,
+      retries: 0,
+      cacheKey: `cbrief:${classId}`,
+      cacheTtlMs: 20 * 60_000,
+    },
+    (v) => {
+      const o = v as { summary?: unknown; actions?: unknown };
+      const summary =
+        typeof o?.summary === "string"
+          ? o.summary.replace(/\s+/g, " ").trim().slice(0, 400)
+          : "";
+      let actions: string[] = [];
+      if (Array.isArray(o?.actions)) {
+        actions = o.actions
+          .map((x) =>
+            typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, 240) : ""
+          )
+          .filter(Boolean)
+          .slice(0, 5);
+      }
+      return summary.length >= 60 && actions.length >= 2
+        ? { summary, actions }
+        : null;
+    }
+  );
+
+  const aiBrief = aiResult
+    ? { ...aiResult, source: "ai" as const }
+    : { ...localBrief, source: "local" as const };
+
   return {
     classId,
     className: schoolClass.name,
     section: schoolClass.section,
     studentCount: students.length,
-    classAvg: students.length ? Math.round(avgSum / students.length) : 0,
-    attendanceAvg: students.length ? Math.round(attSum / students.length) : 0,
+    classAvg,
+    attendanceAvg,
     subjectAvg,
     hardestChapters,
     riskRows: riskRows.sort((a, b) => a.att - b.att).slice(0, 6),
@@ -1050,5 +1224,6 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
       .slice(0, 6),
     quizCount,
+    aiBrief,
   };
 }

@@ -120,6 +120,42 @@ export default async function TeacherInsightsPage({
         />
       </div>
 
+      <Card className="mt-5 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-gradient-to-r from-brand-50/70 via-white to-mint-50/60 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="rounded-lg bg-brand-600/10 p-1.5 text-brand-600">
+              <Sparkles size={16} />
+            </span>
+            <div>
+              <p className="text-[14px] font-extrabold text-ink-900">
+                This week's class brief
+              </p>
+              <p className="text-[11.5px] text-ink-500">
+                Evidence-led summary and your next steps for {insights.className} – {insights.section}
+              </p>
+            </div>
+          </div>
+          <Badge tone={insights.aiBrief.source === "ai" ? "brand" : "neutral"}>
+            {insights.aiBrief.source === "ai" ? "AI-generated" : "Data summary"}
+          </Badge>
+        </div>
+        <div className="grid gap-5 px-5 py-4 sm:grid-cols-[1.2fr_1fr]">
+          <p className="text-[14px] leading-relaxed text-ink-700">
+            {insights.aiBrief.summary}
+          </p>
+          <ul className="space-y-2">
+            {insights.aiBrief.actions.map((a, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-[13.5px] text-ink-700">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-mint-100 text-[11px] font-extrabold text-mint-700">
+                  {i + 1}
+                </span>
+                <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
@@ -174,8 +210,8 @@ export default async function TeacherInsightsPage({
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <Card>
           <CardHeader
-            title="Hardest chapters"
-            sub="Lowest class accuracy from quiz attempts"
+            title="Class understanding map"
+            sub="Topic mastery across everyone who attempted — review chips mark whole-class gaps"
           />
           <ul className="divide-y divide-line">
             {insights.hardestChapters.map((ch, i) => (
@@ -185,12 +221,17 @@ export default async function TeacherInsightsPage({
                     {ch.chapter}
                   </p>
                   <p className="text-[11.5px] text-ink-500">
-                    {ch.subject} · {ch.attempts} attempts
+                    {ch.subject} · {ch.students} students · {ch.attempts} responses
                   </p>
                 </div>
-                <Badge tone={ch.pct < 50 ? "danger" : ch.pct < 75 ? "warning" : "success"}>
-                  {ch.pct}%
-                </Badge>
+                <span className="flex shrink-0 items-center gap-2">
+                  {ch.pct < 55 && (
+                    <Badge tone="warning">Review with class</Badge>
+                  )}
+                  <Badge tone={ch.pct < 50 ? "danger" : ch.pct < 75 ? "warning" : "success"}>
+                    {ch.pct}%
+                  </Badge>
+                </span>
               </li>
             ))}
             {!insights.hardestChapters.length && (

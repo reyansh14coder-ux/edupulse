@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { AttendanceDonut, SubjectBars, TrendArea } from "@/components/charts";
 import { PracticeQuizButton } from "@/components/teacher-forms";
 import { refreshRecommendationsAction } from "@/app/actions/recommend";
+import { nextBestAction } from "@/lib/next-action";
+import { StudentVoiceCard } from "@/components/student-voice";
 import {
   Avatar,
   Badge,
@@ -74,6 +76,7 @@ export default async function StudentDashboardPage() {
   ]);
   if (!pulse) notFound();
 
+  const nba = await nextBestAction(base.id);
   const pendingCount = pulse.pendingHw.length;
 
   return (
@@ -133,6 +136,31 @@ export default async function StudentDashboardPage() {
           tone={pendingCount ? "warning" : "success"}
         />
       </div>
+
+      <Card className="mt-5 overflow-hidden border-brand-200/70 bg-gradient-to-r from-brand-50/70 via-white to-white">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <span className="rounded-xl bg-brand-600 p-2 text-white shadow-[0_8px_20px_-8px_rgba(79,70,229,.8)]">
+              <Sparkles size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-600">
+                Next best action · {nba.reason}
+              </p>
+              <p className="mt-0.5 font-display text-[15.5px] font-extrabold text-ink-900">
+                {nba.title}
+              </p>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-ink-600">{nba.detail}</p>
+            </div>
+          </div>
+          <Link
+            href={nba.cta.href}
+            className="shrink-0 rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700"
+          >
+            {nba.cta.label} →
+          </Link>
+        </div>
+      </Card>
 
       <Card className="mt-5">
         <CardHeader
@@ -266,7 +294,7 @@ export default async function StudentDashboardPage() {
         <Card>
           <CardHeader
             title="AI quizzes"
-            sub="Personalized checks for weaker areas"
+            sub="Personalised practice for your focus areas"
             action={
               <Link href="/student/quizzes" className="text-[13px] font-bold text-brand-600 hover:text-brand-700">
                 All quizzes →
@@ -300,6 +328,10 @@ export default async function StudentDashboardPage() {
             </ul>
           </div>
         </Card>
+      </div>
+
+      <div className="mt-5">
+        <StudentVoiceCard />
       </div>
 
       <Card className="mt-5">

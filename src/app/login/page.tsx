@@ -122,7 +122,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[420px] animate-fade-up">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
             <Logo />
-            <Wordmark />
+            <Wordmark tagline />
           </div>
 
           <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-900">
