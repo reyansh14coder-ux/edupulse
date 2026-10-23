@@ -24,6 +24,8 @@ model User {
   counseling     CounselingSession[] @relation("counselor")
   homeworks      Homework[]
   interventions  StudentIntervention[] @relation("interventionAuthor")
+  feedbackAuthored TeacherFeedback[]  @relation("feedbackAuthor")
+  feedbackAbout    TeacherFeedback[]  @relation("feedbackAbout")
 }
 
 model SchoolClass {
@@ -266,5 +268,17 @@ model StudentIntervention {
   outcome     String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model TeacherFeedback {
+  id         String   @id @default(cuid())
+  teacher    User     @relation("feedbackAbout", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId  String
+  author     User?    @relation("feedbackAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorId   String?
+  category   String
+  body       String
+  status     String   @default("NEW")
+  createdAt  DateTime @default(now())
 }
 

@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { pct } from "@/lib/utils";
+import { gradeTree } from "@/lib/admin";
+import { cn, pct } from "@/lib/utils";
 import {
   createGuidanceNoteAction,
   scheduleSessionAction,
@@ -28,9 +29,16 @@ import {
 
 export const metadata = { title: "Counseling" };
 
-export default async function CounselingPage() {
+export default async function CounselingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ grade?: string; section?: string }>;
+}) {
   const session = await requireSession(["ADMIN", "TEACHER"]);
-  const [students, sessions, notes, recommendations] = await Promise.all([
+  const sp = await searchParams;
+  const gradeFilter = sp.grade ?? "";
+  const sectionFilter = sp.section ?? "";
+  const [students, sessions, notes, recommendations, grades, allClasses] = await Promise.all([
     db.student.findMany({
       include: {
         user: { select: { name: true } },
@@ -62,7 +70,18 @@ export default async function CounselingPage() {
       orderBy: { createdAt: "desc" },
       take: 30,
     }),
+    gradeTree(),
+    db.schoolClass.findMany(),
   ]);
+
+  const matches = (cls: { name: string; section: string } | undefined) => {
+    if (!cls) return false;
+    if (gradeFilter && cls.name !== gradeFilter) return false;
+    if (sectionFilter && cls.section !== sectionFilter) return false;
+    return true;
+  };
+  const activeGrade = grades.find((g) => g.name === gradeFilter) ?? null;
+  const sectionsForGrade = activeGrade ? allClasses.filter((c) => c.name === activeGrade.name) : [];
 
   const teacherScope =
     session.role === "TEACHER"
@@ -72,16 +91,22 @@ export default async function CounselingPage() {
       : null;
 
   const visibleRecs = recommendations.filter(
-    (r) => !teacherScope || r.student && teacherScope.includes(r.student.classId ?? ""),
+    (r) => (!teacherScope || (r.student && teacherScope.includes(r.student.classId ?? ""))),
   );
 
   const atRisk = recommendations
     .map((r) => r.student)
     .filter((s, i, arr) => s && arr.findIndex((x) => x?.id === s.id) === i);
 
-  const soon = sessions.filter((s) => s.status === "SCHEDULED").slice(0, 8);
-  const openRecs = visibleRecs.slice(0, 8);
-  const recentNotes = notes.slice(0, 6);
+  const soon = sessions
+    .filter((s) => s.status === "SCHEDULED" && (session.role !== "ADMIN" || matches(s.student.schoolClass)))
+    .slice(0, 8);
+  const openRecs = visibleRecs
+    .filter((r) => session.role !== "ADMIN" || matches(r.student.schoolClass))
+    .slice(0, 8);
+  const recentNotes = notes
+    .filter((n) => session.role !== "ADMIN" || matches(n.student.schoolClass))
+    .slice(0, 6);
 
   return (
     <div className="animate-fade-in">
@@ -98,6 +123,49 @@ export default async function CounselingPage() {
           <Sparkles size={13} /> {visibleRecs.length} open recommendations
         </Badge>
       </div>
+
+      {session.role === "ADMIN" && (
+        <div className="mb-5 space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11.5px] font-bold uppercase tracking-wider text-ink-400">Grade</span>
+            <Link
+              href="/counseling"
+              className={cn("rounded-full px-3 py-1 text-[12px] font-bold transition", !gradeFilter ? "bg-brand-600 text-white" : "bg-surface text-ink-600 ring-1 ring-line hover:ring-brand-300")}
+            >
+              All
+            </Link>
+            {grades.map((g) => (
+              <Link
+                key={g.name}
+                href={`/counseling?grade=${encodeURIComponent(g.name)}`}
+                className={cn("rounded-full px-3 py-1 text-[12px] font-bold transition", g.name === gradeFilter ? "bg-brand-600 text-white" : "bg-surface text-ink-600 ring-1 ring-line hover:ring-brand-300")}
+              >
+                {g.name}
+              </Link>
+            ))}
+          </div>
+          {activeGrade && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[11.5px] font-bold uppercase tracking-wider text-ink-400">Section</span>
+              <Link
+                href={`/counseling?grade=${encodeURIComponent(activeGrade.name)}`}
+                className={cn("rounded-full px-3 py-1 text-[12px] font-bold transition", !sectionFilter ? "bg-ink-900 text-white" : "bg-surface text-ink-600 ring-1 ring-line")}
+              >
+                All
+              </Link>
+              {sectionsForGrade.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/counseling?grade=${encodeURIComponent(activeGrade.name)}&section=${encodeURIComponent(c.section)}`}
+                  className={cn("rounded-full px-3 py-1 text-[12px] font-bold transition", c.section === sectionFilter ? "bg-ink-900 text-white" : "bg-surface text-ink-600 ring-1 ring-line hover:ring-brand-300")}
+                >
+                  Section {c.section}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
