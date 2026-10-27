@@ -27,7 +27,7 @@ import {
   labelCls,
 } from "@/components/ui";
 
-export const metadata = { title: "Counseling" };
+export const metadata = { title: "Guidance sessions" };
 
 export default async function CounselingPage({
   searchParams,
@@ -113,7 +113,7 @@ export default async function CounselingPage({
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink-900">
-            Counseling
+            Guidance sessions
           </h1>
           <p className="mt-1 text-sm text-ink-500">
             Students flagged by the AI loop, upcoming sessions and guidance notes.
@@ -221,7 +221,7 @@ export default async function CounselingPage({
           </Card>
 
           <Card className="mt-5">
-            <CardHeader title="Upcoming sessions" sub="Scheduled counseling appointments" />
+            <CardHeader title="Upcoming sessions" sub="Scheduled guidance appointments" />
             <ul className="divide-y divide-line">
               {soon.map((s) => (
                 <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">

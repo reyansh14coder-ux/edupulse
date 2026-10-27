@@ -22,6 +22,13 @@ const d = (y: number, m: number, day: number) => new Date(Date.UTC(y, m, day));
 async function main() {
   console.log("Clearing data...");
   await db.recommendation.deleteMany();
+  await db.studentActivity.deleteMany();
+  await db.teacherWeeklyReport.deleteMany();
+  await db.parentQuery.deleteMany();
+  await db.competitionApplication.deleteMany();
+  await db.competition.deleteMany();
+  await db.notice.deleteMany();
+  await db.studentFeedback.deleteMany();
   await db.quizAttempt.deleteMany();
   await db.quiz.deleteMany();
   await db.chapter.deleteMany();
@@ -639,6 +646,121 @@ async function main() {
         status: "NEW",
       };
     }),
+  });
+
+  console.log("Creating notices, competitions & activities...");
+  const now = new Date();
+  const dayIdx = (now.getDay() + 6) % 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayIdx);
+
+  await db.notice.createMany({
+    data: [
+      {
+        title: "Half-yearly exam timetable released",
+        body: "The half-yearly examination timetable for Classes 6-10 is now published. Exams begin next Monday. Check the notice board in your student dashboard daily for updates from the school office.",
+        audience: "ALL",
+        createdById: admin.id,
+        authorName: admin.name,
+        createdAt: new Date(now.getTime() - 2 * 864e5),
+      },
+      {
+        title: "Inter-house quiz registrations open",
+        body: "Registrations for the Inter-house Quiz Competition are open till Friday. Students interested in Science, Mathematics or General Knowledge can apply from the Competitions section.",
+        audience: "STUDENT",
+        createdById: admin.id,
+        authorName: admin.name,
+        createdAt: new Date(now.getTime() - 864e5),
+      },
+    ],
+  });
+
+  await db.competition.create({
+    data: {
+      title: "Inter-house Science Quiz 2026",
+      body: "Teams of two will compete across Science, Mathematics and General Knowledge rounds. Open to Classes 6-10. Apply with a short note on why you want to participate — selected teams get two extra practice sessions with their subject teacher.",
+      deadline: new Date(now.getTime() + 5 * 864e5),
+      createdById: rajesh.id,
+      authorName: rajesh.name,
+    },
+  });
+
+  const activityNames = ["Aarav Patel", "Diya Reddy", "Kabir Singh", "Dev Malhotra", "Nisha Yadav", "Aditi Kulkarni"];
+  for (const name of activityNames) {
+    const st = students.find((s) => s.name === name)!;
+    await db.studentActivity.createMany({
+      data: [
+        {
+          studentId: st.id,
+          kind: "ACTIVITY",
+          title: "Inter-house Kabaddi practice",
+          note: "Representing the school team in the upcoming inter-house tournament.",
+          date: new Date(now.getTime() - 2 * 864e5),
+        },
+        {
+          studentId: st.id,
+          kind: "BEHAVIOUR",
+          title: "Helped a classmate with homework",
+          note: "Noticed guiding a friend through maths homework during lunch break — positive, cooperative behaviour.",
+          date: new Date(now.getTime() - 3 * 864e5),
+        },
+      ],
+    });
+  }
+
+  await db.teacherWeeklyReport.createMany({
+    data: [
+      {
+        teacherId: anjali.id,
+        weekOf: monday,
+        body: "Completed Algebra revision with Class 9 and Class 10; Class 10 board-prep mock test scheduled for Friday. Aarav Patel needs extra practice on algebra basics — a short revision plan was shared with his parents.",
+      },
+      {
+        teacherId: rajesh.id,
+        weekOf: monday,
+        body: "Conducted Science lab sessions for Classes 8-10. Hand-in-hand activity participation improved this week. Inter-house Science Quiz announced — registration closes Friday.",
+      },
+    ],
+  });
+
+  await db.studentFeedback.createMany({
+    data: [
+      {
+        studentId: students.find((s) => s.name === "Nisha Yadav")!.id,
+        category: "SUGGESTION",
+        subject: "Facilities",
+        body: "The science lab is often full during lunch break. Could one free period be kept open for curious students to run small experiments?",
+      },
+      {
+        studentId: students.find((s) => s.name === "Aarav Patel")!.id,
+        category: "COMPLAINT",
+        subject: "Transport",
+        body: "School bus route 4 has been arriving 15 minutes late for the past week, which makes me miss the morning assembly.",
+        status: "REVIEWED",
+      },
+    ],
+  });
+
+  await db.parentQuery.createMany({
+    data: [
+      {
+        parentId: students.find((s) => s.name === "Aarav Patel")!.parentId,
+        studentId: students.find((s) => s.name === "Aarav Patel")!.id,
+        recipient: "TEACHER",
+        subject: "Mathematics",
+        body: "How should Aarav revise algebra at home before the half-yearly exam? He gets stuck on word problems.",
+        status: "ANSWERED",
+        reply: "Please ask him to attempt the practice questions in the My Plan section daily for 30 minutes and mark the ones he gets wrong — I will review them in class this week.",
+        repliedById: anjali.id,
+      },
+      {
+        parentId: students.find((s) => s.name === "Dev Malhotra")!.parentId,
+        studentId: students.find((s) => s.name === "Dev Malhotra")!.id,
+        recipient: "PRINCIPAL",
+        subject: "Transport",
+        body: "Will the school bus route near Ashok Nagar get a stop closer to the colony? It is a long walk for younger children.",
+        status: "OPEN",
+      },
+    ],
   });
 
   const counts = {

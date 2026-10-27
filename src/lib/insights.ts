@@ -29,18 +29,21 @@ function subjectStats(
     arr.push(r);
     bySubject.set(r.subject, arr);
   }
+  const weightedAvg = (rows: { pct: number; maxMarks: number }[]) => {
+    const weight = rows.reduce((s, r) => s + r.maxMarks, 0);
+    return weight > 0
+      ? rows.reduce((s, r) => s + (r.pct * r.maxMarks) / 100, 0) / weight * 100
+      : 0;
+  };
   const stats: SubjectStat[] = [];
   for (const [subject, arr] of bySubject) {
     const sorted = [...arr].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const total = sorted.reduce((s, r) => s + r.pct, 0);
-    const avg = total / sorted.length;
+    const avg = weightedAvg(sorted);
     const half = Math.floor(sorted.length / 2);
     let trend = 0;
     if (sorted.length >= 4) {
-      const earlier =
-        sorted.slice(0, half).reduce((s, r) => s + r.pct, 0) / (half || 1);
-      const recent =
-        sorted.slice(sorted.length - half).reduce((s, r) => s + r.pct, 0) / (half || 1);
+      const earlier = weightedAvg(sorted.slice(0, half));
+      const recent = weightedAvg(sorted.slice(sorted.length - half));
       trend = recent - earlier;
     }
     stats.push({ subject, avg, count: sorted.length, trend });
@@ -75,20 +78,19 @@ export async function studentPulse(studentId: string) {
     assessmentId: s.assessmentId,
   }));
 
-  const totalMarks = student.scores.reduce(
-    (s, x) => s + pctOf(x.marks, x.assessment.maxMarks),
-    0
-  );
-  const overall = rows.length ? totalMarks / rows.length : 0;
+  const totalMarks = student.scores.reduce((s, x) => s + x.marks, 0);
+  const totalMax = student.scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+  const overall = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
 
+  const weightedOf = (rs: typeof rows) => {
+    const m = rs.reduce((s, r) => s + r.marks, 0);
+    const mx = rs.reduce((s, r) => s + r.max, 0);
+    return mx > 0 ? (m / mx) * 100 : overall;
+  };
   const recent = rows.slice(-4);
   const earlier = rows.slice(0, Math.max(rows.length - 4, 0));
-  const recentAvg = recent.length
-    ? recent.reduce((s, r) => s + r.pct, 0) / recent.length
-    : overall;
-  const earlierAvg = earlier.length
-    ? earlier.reduce((s, r) => s + r.pct, 0) / earlier.length
-    : overall;
+  const recentAvg = recent.length ? weightedOf(recent) : overall;
+  const earlierAvg = earlier.length ? weightedOf(earlier) : overall;
   const delta = earlier.length ? recentAvg - earlierAvg : 0;
 
   const subjects = subjectStats(rows);
@@ -125,13 +127,11 @@ export async function studentPulse(studentId: string) {
     include: { scores: { include: { assessment: true } } },
   });
   const ranked = classmates
-    .map((c) => ({
-      id: c.id,
-      avg: c.scores.length
-        ? c.scores.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) /
-          c.scores.length
-        : 0,
-    }))
+    .map((c) => {
+      const m = c.scores.reduce((s, x) => s + x.marks, 0);
+      const mx = c.scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+      return { id: c.id, avg: mx > 0 ? (m / mx) * 100 : 0 };
+    })
     .sort((a, b) => b.avg - a.avg);
   rank = ranked.findIndex((r) => r.id === studentId) + 1;
 
@@ -215,17 +215,13 @@ export async function studentPulse(studentId: string) {
 }
 
 export async function classAverage(classId: string) {
-  const agg = await db.score.aggregate({
+  const rows = await db.score.findMany({
     where: { student: { classId }, assessment: { classId } },
-    _avg: { marks: true },
+    select: { marks: true, assessment: { select: { maxMarks: true } } },
   });
-  const max = await db.assessment.findFirst({
-    where: { classId },
-    orderBy: { date: "desc" },
-    select: { maxMarks: true },
-  });
-  if (!agg._avg.marks || !max) return 0;
-  return pctOf(agg._avg.marks, max.maxMarks);
+  const total = rows.reduce((s, r) => s + r.marks, 0);
+  const max = rows.reduce((s, r) => s + r.assessment.maxMarks, 0);
+  return max > 0 ? (total / max) * 100 : 0;
 }
 
 export async function schoolPulse() {
@@ -241,55 +237,66 @@ export async function schoolPulse() {
       db.assessment.findMany({ orderBy: { date: "asc" } }),
     ]);
 
-  const overall = scores.length
-    ? scores.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) /
-      scores.length
-    : 0;
+  const totalMarks = scores.reduce((s, x) => s + x.marks, 0);
+  const totalMax = scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+  const overall = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
 
   const present = attendance.filter((a) => a.status !== "ABSENT").length;
   const attendancePct = attendance.length
     ? (present / attendance.length) * 100
     : 100;
 
-  const bySubject = new Map<string, { sum: number; n: number; trend: number[] }>();
+  const bySubject = new Map<
+    string,
+    { marks: number; max: number; n: number }
+  >();
   for (const s of scores) {
     const k = s.assessment.subject;
-    const e = bySubject.get(k) ?? { sum: 0, n: 0, trend: [] };
-    e.sum += pctOf(s.marks, s.assessment.maxMarks);
+    const e = bySubject.get(k) ?? { marks: 0, max: 0, n: 0 };
+    e.marks += s.marks;
+    e.max += s.assessment.maxMarks;
     e.n += 1;
-    e.trend.push(pctOf(s.marks, s.assessment.maxMarks));
     bySubject.set(k, e);
   }
   const subjects = [...bySubject.entries()]
-    .map(([subject, e]) => ({ subject, avg: e.sum / e.n, count: e.n }))
+    .map(([subject, e]) => ({
+      subject,
+      avg: e.max > 0 ? (e.marks / e.max) * 100 : 0,
+      count: e.n,
+    }))
     .sort((a, b) => b.avg - a.avg);
 
-  const byClass = new Map<string, { sum: number; n: number; name: string }>();
+  const byClass = new Map<string, { marks: number; max: number; name: string }>();
   for (const s of scores) {
     const k = s.student.classId;
-    const e = byClass.get(k) ?? { sum: 0, n: 0, name: `${s.student.schoolClass.name} ${s.student.schoolClass.section}` };
-    e.sum += pctOf(s.marks, s.assessment.maxMarks);
-    e.n += 1;
+    const e =
+      byClass.get(k) ?? {
+        marks: 0,
+        max: 0,
+        name: `${s.student.schoolClass.name} ${s.student.schoolClass.section}`,
+      };
+    e.marks += s.marks;
+    e.max += s.assessment.maxMarks;
     byClass.set(k, e);
   }
   const classAvgs = [...byClass.values()]
-    .map((e) => ({ name: e.name, avg: e.sum / e.n }))
+    .map((e) => ({ name: e.name, avg: e.max > 0 ? (e.marks / e.max) * 100 : 0 }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const byMonth = new Map<string, { sum: number; n: number }>();
+  const byMonth = new Map<string, { marks: number; max: number }>();
   for (const s of assessments) {
     const key = isoDate(s.date).slice(0, 7);
     const rows = scores.filter((x) => x.assessmentId === s.id);
-    const e = byMonth.get(key) ?? { sum: 0, n: 0 };
+    const e = byMonth.get(key) ?? { marks: 0, max: 0 };
     for (const r of rows) {
-      e.sum += pctOf(r.marks, s.maxMarks);
-      e.n += 1;
+      e.marks += r.marks;
+      e.max += s.maxMarks;
     }
-    if (e.n) byMonth.set(key, e);
+    if (e.max > 0) byMonth.set(key, e);
   }
   const monthly = [...byMonth.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, e]) => ({ month, value: Math.round(e.sum / e.n) }));
+    .map(([month, e]) => ({ month, value: Math.round((e.marks / e.max) * 100) }));
 
   const allStudents = await db.student.findMany({
     include: {
@@ -302,10 +309,9 @@ export async function schoolPulse() {
   });
   const atRisk = allStudents
     .map((st) => {
-      const avg = st.scores.length
-        ? st.scores.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) /
-          st.scores.length
-        : 0;
+      const m = st.scores.reduce((s, x) => s + x.marks, 0);
+      const mx = st.scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+      const avg = mx > 0 ? (m / mx) * 100 : 0;
       const att = st.attendance.length
         ? (st.attendance.filter((a) => a.status !== "ABSENT").length /
             st.attendance.length) *
@@ -355,10 +361,9 @@ export async function teacherPulse(teacherId: string) {
     include: { assessment: true, student: { include: { user: true, schoolClass: true } } },
   });
 
-  const overall = scores.length
-    ? scores.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) /
-      scores.length
-    : 0;
+  const tTotal = scores.reduce((s, x) => s + x.marks, 0);
+  const tMax = scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+  const overall = tMax > 0 ? (tTotal / tMax) * 100 : 0;
 
   const attendance = await db.attendance.findMany({
     where: { student: { classId: { in: classIds } } },
@@ -378,29 +383,37 @@ export async function teacherPulse(teacherId: string) {
 
   const subjectsTaught = [...new Set(assignments.map((a) => a.subject))];
 
-  const subjectMap = new Map<string, { sum: number; n: number }>();
+  const subjectMap = new Map<string, { marks: number; max: number; n: number }>();
   for (const s of scores) {
     const k = s.assessment.subject;
-    const e = subjectMap.get(k) ?? { sum: 0, n: 0 };
-    e.sum += pctOf(s.marks, s.assessment.maxMarks);
+    const e = subjectMap.get(k) ?? { marks: 0, max: 0, n: 0 };
+    e.marks += s.marks;
+    e.max += s.assessment.maxMarks;
     e.n += 1;
     subjectMap.set(k, e);
   }
   const subjects = [...subjectMap.entries()]
-    .map(([subject, e]) => ({ subject, avg: e.sum / e.n, count: e.n }))
+    .map(([subject, e]) => ({
+      subject,
+      avg: e.max > 0 ? (e.marks / e.max) * 100 : 0,
+      count: e.n,
+    }))
     .sort((a, b) => b.avg - a.avg);
 
-  const monthMap = new Map<string, { sum: number; n: number }>();
+  const monthMap = new Map<string, { marks: number; max: number }>();
   for (const s of scores) {
     const key = isoDate(s.assessment.date).slice(0, 7);
-    const e = monthMap.get(key) ?? { sum: 0, n: 0 };
-    e.sum += pctOf(s.marks, s.assessment.maxMarks);
-    e.n += 1;
+    const e = monthMap.get(key) ?? { marks: 0, max: 0 };
+    e.marks += s.marks;
+    e.max += s.assessment.maxMarks;
     monthMap.set(key, e);
   }
   const trend = [...monthMap.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, e]) => ({ month, value: Math.round(e.sum / e.n) }));
+    .map(([month, e]) => ({
+      month,
+      value: e.max > 0 ? Math.round((e.marks / e.max) * 100) : 0,
+    }));
 
   const ownStudents = await db.student.findMany({
     where: { classId: { in: classIds } },
@@ -414,10 +427,9 @@ export async function teacherPulse(teacherId: string) {
   });
   const atRisk = ownStudents
     .map((st) => {
-      const avg = st.scores.length
-        ? st.scores.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) /
-          st.scores.length
-        : 0;
+      const m = st.scores.reduce((s, x) => s + x.marks, 0);
+      const mx = st.scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+      const avg = mx > 0 ? (m / mx) * 100 : 0;
       const att = st.attendance.length
         ? (st.attendance.filter((a) => a.status !== "ABSENT").length /
             st.attendance.length) *
@@ -498,7 +510,10 @@ export type WeeklyReport = {
     trend: number;
     weakChapters: string[];
     rec: string;
+    action: string;
   }[];
+  behaviour: { title: string; note: string | null; date: string }[];
+  activities: { title: string; note: string | null; date: string }[];
   notes: {
     id: string;
     kind: "Teacher" | "Counselor";
@@ -556,12 +571,9 @@ export async function weeklyReport(
     .filter((s) => inWeek(s.assessment.date))
     .sort((a, b) => a.assessment.date.getTime() - b.assessment.date.getTime());
 
-  const allPcts = student.scores.map((s) =>
-    pctOf(s.marks, s.assessment.maxMarks)
-  );
-  const overall = allPcts.length
-    ? allPcts.reduce((s, v) => s + v, 0) / allPcts.length
-    : 0;
+  const totalMarks = student.scores.reduce((s, x) => s + x.marks, 0);
+  const totalMax = student.scores.reduce((s, x) => s + x.assessment.maxMarks, 0);
+  const overall = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
 
   const homeworkDue = student.submissions
     .filter((s) => inWeek(s.homework.dueDate) || inWeek(s.homework.assignedOn))
@@ -617,14 +629,13 @@ export async function weeklyReport(
     healthy
   );
 
-  const weekPcts = weekAssessments.map((s) => pctOf(s.marks, s.assessment.maxMarks));
-  const prevPcts = prevScores.map((s) => pctOf(s.marks, s.assessment.maxMarks));
-  const weekAvg = weekPcts.length
-    ? weekPcts.reduce((s, v) => s + v, 0) / weekPcts.length
-    : null;
-  const prevAvg = prevPcts.length
-    ? prevPcts.reduce((s, v) => s + v, 0) / prevPcts.length
-    : null;
+  const weightedOf = (arr: typeof student.scores) => {
+    const m = arr.reduce((s, x) => s + x.marks, 0);
+    const mx = arr.reduce((s, x) => s + x.assessment.maxMarks, 0);
+    return mx > 0 ? (m / mx) * 100 : null;
+  };
+  const weekAvg = weekAssessments.length ? weightedOf(weekAssessments) : null;
+  const prevAvg = prevScores.length ? weightedOf(prevScores) : null;
   const delta = weekAvg !== null && prevAvg !== null ? weekAvg - prevAvg : null;
 
   const plans = await db.recommendation.findMany({
@@ -634,7 +645,7 @@ export async function weeklyReport(
     take: 4,
   });
 
-  const [gaps, doneGoals, counseling] = await Promise.all([
+  const [gaps, doneGoals, counseling, weekActivities] = await Promise.all([
     learningGaps(studentId),
     db.studentGoal.count({
       where: { studentId, kind: "GOAL", status: "DONE" },
@@ -645,7 +656,27 @@ export async function weeklyReport(
       orderBy: { scheduledFor: "desc" },
       take: 2,
     }),
+    db.studentActivity.findMany({
+      where: { studentId, date: { gte: monday, lt: weekEnd } },
+      orderBy: { date: "desc" },
+      take: 8,
+    }),
   ]);
+
+  const behaviour = weekActivities
+    .filter((a) => a.kind === "BEHAVIOUR")
+    .map((a) => ({
+      title: a.title,
+      note: a.note,
+      date: isoDate(a.date),
+    }));
+  const activities = weekActivities
+    .filter((a) => a.kind === "ACTIVITY")
+    .map((a) => ({
+      title: a.title,
+      note: a.note,
+      date: isoDate(a.date),
+    }));
 
   const submittedCount = student.submissions.filter(
     (s) => s.status !== "PENDING"
@@ -718,6 +749,7 @@ export async function weeklyReport(
     if (s.trend > 4) rec += t.trendUp;
     else if (s.trend < -4) rec += t.trendDown;
     if (weakChapters.length) rec += t.sGaps(weakChapters.join(", "));
+    const focusChapter = weakChapters[0] ?? null;
     return {
       subject: s.subject,
       avg: s.avg,
@@ -725,6 +757,7 @@ export async function weeklyReport(
       trend: s.trend,
       weakChapters,
       rec,
+      action: t.sAction(s.subject, focusChapter, level),
     };
   });
 
@@ -744,7 +777,7 @@ export async function weeklyReport(
       kind: "Counselor" as const,
       author: c.counselor.name,
       category: "COUNSELING",
-      title: "Counseling session",
+      title: "Guidance session",
       excerpt:
         (c.notes ?? "").length > 150
           ? `${(c.notes ?? "").slice(0, 150).trim()}…`
@@ -833,6 +866,8 @@ Return ONLY {"studies":"...","advice":"..."}.`,
     },
     subjects: subjectRows,
     notes: noteRows,
+    behaviour,
+    activities,
   };
 }
 
@@ -949,7 +984,7 @@ export async function progressTimeline(studentId: string, take = 16) {
       id: "c" + s.id,
       date: s.scheduledFor,
       kind: "COUNSELING",
-      title: `Counseling session (${s.status.toLowerCase()})`,
+      title: `Guidance session (${s.status.toLowerCase()})`,
       meta: "Scheduled with counselor",
       tone: "brand",
     });
@@ -1023,22 +1058,23 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
   const now = Date.now();
   const d30 = now - 30 * 864e5;
 
-  const subjectMap = new Map<string, { sum: number; n: number }>();
+  const subjectMap = new Map<string, { marks: number; max: number }>();
   const riskRows: ClassInsights["riskRows"] = [];
   const movers: { id: string; name: string; delta: number }[] = [];
   let attSum = 0;
   let avgSum = 0;
 
   for (const st of students) {
-    const pcts = st.scores.map((s) => pctOf(s.marks, s.assessment.maxMarks));
-    const avg = pcts.length ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
+    const m = st.scores.reduce((a, s) => a + s.marks, 0);
+    const mx = st.scores.reduce((a, s) => a + s.assessment.maxMarks, 0);
+    const avg = mx > 0 ? (m / mx) * 100 : 0;
     avgSum += avg;
 
     for (const s of st.scores) {
       const key = s.assessment.subject;
-      const agg = subjectMap.get(key) ?? { sum: 0, n: 0 };
-      agg.sum += pctOf(s.marks, s.assessment.maxMarks);
-      agg.n += 1;
+      const agg = subjectMap.get(key) ?? { marks: 0, max: 0 };
+      agg.marks += s.marks;
+      agg.max += s.assessment.maxMarks;
       subjectMap.set(key, agg);
     }
 
@@ -1051,10 +1087,17 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
 
     const recent = st.scores.filter((s) => s.assessment.date.getTime() >= d30);
     const older = st.scores.filter((s) => s.assessment.date.getTime() < d30);
+    const wOf = (arr: typeof st.scores) => {
+      const wm = arr.reduce((s, x) => s + x.marks, 0);
+      const wmx = arr.reduce((s, x) => s + x.assessment.maxMarks, 0);
+      return wmx > 0 ? (wm / wmx) * 100 : 0;
+    };
     if (recent.length && older.length) {
-      const rAvg = recent.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) / recent.length;
-      const oAvg = older.reduce((s, x) => s + pctOf(x.marks, x.assessment.maxMarks), 0) / older.length;
-      movers.push({ id: st.id, name: st.user.name, delta: Math.round(rAvg - oAvg) });
+      movers.push({
+        id: st.id,
+        name: st.user.name,
+        delta: Math.round(wOf(recent) - wOf(older)),
+      });
     }
   }
 
@@ -1115,7 +1158,10 @@ export async function classInsights(classId: string): Promise<ClassInsights | nu
     .slice(0, 8);
 
   const subjectAvg = [...subjectMap.entries()]
-    .map(([subject, a]) => ({ subject, avg: Math.round(a.sum / a.n) }))
+    .map(([subject, a]) => ({
+      subject,
+      avg: a.max > 0 ? Math.round((a.marks / a.max) * 100) : 0,
+    }))
     .sort((a, b) => a.avg - b.avg);
 
   const classAvg = students.length ? Math.round(avgSum / students.length) : 0;

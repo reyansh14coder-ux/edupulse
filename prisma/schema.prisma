@@ -26,6 +26,11 @@ model User {
   interventions  StudentIntervention[] @relation("interventionAuthor")
   feedbackAuthored TeacherFeedback[]  @relation("feedbackAuthor")
   feedbackAbout    TeacherFeedback[]  @relation("feedbackAbout")
+  noticesAuthored  Notice[]           @relation("noticeAuthor")
+  queriesAnswered  ParentQuery[]      @relation("queryResponder")
+  queriesRaised    ParentQuery[]      @relation("queryAuthor")
+  weeklyNotes      TeacherWeeklyReport[]
+  competitions     Competition[]      @relation("competitionAuthor")
 }
 
 model SchoolClass {
@@ -74,6 +79,9 @@ model Student {
   goals         StudentGoal[]
   voices        StudentVoice[]
   interventions StudentIntervention[]
+  feedback      StudentFeedback[]
+  applications  CompetitionApplication[]
+  activities    StudentActivity[]
 }
 
 model ParentLink {
@@ -280,5 +288,92 @@ model TeacherFeedback {
   body       String
   status     String   @default("NEW")
   createdAt  DateTime @default(now())
+}
+
+model StudentFeedback {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  category  String   @default("SUGGESTION")
+  subject   String   @default("General")
+  body      String
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+}
+
+model Notice {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  audience    String    @default("ALL")
+  classId     String?
+  createdBy   User?     @relation("noticeAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  authorName  String    @default("Administration")
+  createdAt   DateTime  @default(now())
+}
+
+model Competition {
+  id          String                  @id @default(cuid())
+  title       String
+  body        String
+  deadline    DateTime?
+  classId     String?
+  createdBy   User?                   @relation("competitionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  authorName  String                  @default("School")
+  createdAt   DateTime                @default(now())
+  applications CompetitionApplication[]
+}
+
+model CompetitionApplication {
+  id            String      @id @default(cuid())
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  competitionId String
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId     String
+  note          String?
+  appliedAt     DateTime    @default(now())
+
+  @@unique([competitionId, studentId])
+}
+
+model ParentQuery {
+  id           String   @id @default(cuid())
+  parent       User     @relation("queryAuthor", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId     String
+  studentId    String?
+  recipient    String   @default("TEACHER")
+  subject      String?
+  body         String
+  status       String   @default("OPEN")
+  reply        String?
+  repliedById  String?
+  repliedBy    User?    @relation("queryResponder", fields: [repliedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model TeacherWeeklyReport {
+  id        String   @id @default(cuid())
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId String
+  weekOf    DateTime
+  body      String
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, weekOf])
+}
+
+model StudentActivity {
+  id          String   @id @default(cuid())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  kind        String   @default("ACTIVITY")
+  title       String
+  note        String?
+  date        DateTime
+  createdById String?
+  createdAt   DateTime @default(now())
 }
 

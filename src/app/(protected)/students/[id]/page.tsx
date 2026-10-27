@@ -5,8 +5,10 @@ import {
   BookOpen,
   CalendarCheck2,
   HeartHandshake,
+  Smile,
   Sparkles,
   TrendingUp,
+  Trophy,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -14,6 +16,7 @@ import { studentPulse } from "@/lib/insights";
 import { ensureRecommendations, draftPlan } from "@/lib/ai";
 import { logAudit } from "@/lib/audit";
 import { planFormAction } from "@/app/actions/plan";
+import { logActivityAction } from "@/app/actions/activities";
 import { fmtDate, pct } from "@/lib/utils";
 import { AttendanceDonut, SubjectBars, TrendArea } from "@/components/charts";
 import { refreshRecommendationsAction } from "@/app/actions/recommend";
@@ -27,6 +30,7 @@ import {
   PageHeader,
   ScoreRing,
   StatCard,
+  btnOutline,
   inputCls,
 } from "@/components/ui";
 
@@ -81,7 +85,7 @@ export default async function StudentProfilePage({
     if (!teaches) notFound();
   }
 
-  const [pulse, recommendations, attempts, activities, assessments, guidance, sessions, interventions] =
+  const [pulse, recommendations, attempts, activities, assessments, guidance, sessions, interventions, logs] =
     await Promise.all([
       studentPulse(id),
       ensureRecommendations(id),
@@ -120,6 +124,11 @@ export default async function StudentProfilePage({
         include: { createdBy: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
         take: 6,
+      }),
+      db.studentActivity.findMany({
+        where: { studentId: id },
+        orderBy: { date: "desc" },
+        take: 10,
       }),
     ]);
   if (!pulse) notFound();
@@ -467,11 +476,96 @@ export default async function StudentProfilePage({
 
           <Card>
             <CardHeader
+              title="Behaviour & activities"
+              sub="Classroom observations, awards and extracurriculars"
+              action={<Badge tone="info">{logs.length}</Badge>}
+            />
+            {canPlan && (
+              <form
+                action={logActivityAction}
+                className="space-y-2.5 border-b border-line px-5 py-4"
+              >
+                <input type="hidden" name="studentId" value={student.id} />
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  <select name="kind" defaultValue="ACTIVITY" className={inputCls}>
+                    <option value="ACTIVITY">Activity</option>
+                    <option value="BEHAVIOUR">Behaviour</option>
+                  </select>
+                  <input
+                    name="title"
+                    required
+                    maxLength={160}
+                    placeholder="e.g. Helped a classmate with Maths"
+                    className={inputCls}
+                  />
+                  <input
+                    type="date"
+                    name="date"
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    className={inputCls}
+                  />
+                </div>
+                <textarea
+                  name="note"
+                  rows={2}
+                  maxLength={600}
+                  placeholder="Optional detail — what happened and how it went"
+                  className={inputCls}
+                />
+                <button type="submit" className={btnOutline}>
+                  Log entry
+                </button>
+              </form>
+            )}
+            <ul className="divide-y divide-line">
+              {logs.map((l) => (
+                <li key={l.id} className="flex gap-3 px-5 py-3">
+                  <span
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                      l.kind === "BEHAVIOUR"
+                        ? "bg-mint-500/10 text-mint-600"
+                        : "bg-accent-500/10 text-accent-600"
+                    }`}
+                  >
+                    {l.kind === "BEHAVIOUR" ? (
+                      <Smile size={14} />
+                    ) : (
+                      <Trophy size={14} />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[13.5px] font-bold text-ink-900">{l.title}</p>
+                      <Badge tone={l.kind === "BEHAVIOUR" ? "success" : "warning"}>
+                        {l.kind === "BEHAVIOUR" ? "Behaviour" : "Activity"}
+                      </Badge>
+                      <span className="text-[11.5px] text-ink-400">
+                        {fmtDate(l.date)}
+                      </span>
+                    </div>
+                    {l.note && (
+                      <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-600">
+                        {l.note}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+              {!logs.length && (
+                <li className="px-5 py-6 text-center text-[13px] text-ink-500">
+                  No behaviour or activity entries yet.
+                </li>
+              )}
+            </ul>
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Guidance & counseling"
               sub="Notes from teachers and counselors"
               action={
                 <Link href="/counseling" className="text-[13px] font-bold text-brand-600">
-                  Counseling →
+                  Guidance sessions →
                 </Link>
               }
             />

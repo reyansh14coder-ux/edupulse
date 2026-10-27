@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { teacherPerformance } from "@/lib/admin";
-import { pct } from "@/lib/utils";
+import { pct, weekMonday } from "@/lib/utils";
 import { logTeacherFeedbackAction, setFeedbackStatusAction } from "@/app/actions/feedback";
 import {
   Avatar,
@@ -21,7 +21,7 @@ export const metadata = { title: "Teachers" };
 export default async function AdminTeachersPage() {
   await requireSession(["ADMIN"]);
 
-  const [teachers, staff] = await Promise.all([
+  const [teachers, staff, weeklyNotes] = await Promise.all([
     teacherPerformance(),
     db.user.findMany({
       where: { role: "TEACHER" },
@@ -30,6 +30,11 @@ export default async function AdminTeachersPage() {
         feedbackAbout: { orderBy: { createdAt: "desc" }, take: 5, include: { author: { select: { name: true } } } },
       },
       orderBy: { name: "asc" },
+    }),
+    db.teacherWeeklyReport.findMany({
+      where: { weekOf: weekMonday() },
+      include: { teacher: { select: { name: true, title: true } } },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -108,6 +113,37 @@ export default async function AdminTeachersPage() {
             <EmptyState title="No teachers yet" hint="Add teachers from setup." icon={<Users size={20} />} />
           )}
         </div>
+      </Card>
+
+      <Card className="mb-5">
+        <CardHeader
+          title="Weekly reports from teachers"
+          sub={`Short notes submitted this week (${weekMonday().toLocaleDateString("en-IN", { day: "numeric", month: "short" })} on) — what they covered and who needs support.`}
+        />
+        <ul className="divide-y divide-line px-5 pb-5 pt-2">
+          {weeklyNotes.map((n) => (
+            <li key={n.id} className="flex flex-wrap items-start gap-3 py-3">
+              <Avatar name={n.teacher.name} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] font-bold text-ink-900">
+                  {n.teacher.name}
+                  <span className="ml-2 text-[12px] font-semibold text-ink-400">
+                    {n.teacher.title ?? "Teacher"}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-[13px] leading-relaxed text-ink-600">{n.body}</p>
+              </div>
+              <span className="shrink-0 text-[11.5px] text-ink-400">
+                {n.createdAt.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </span>
+            </li>
+          ))}
+          {!weeklyNotes.length && (
+            <li className="py-6 text-center text-[13px] text-ink-500">
+              No weekly reports submitted yet — teachers post these from their dashboard.
+            </li>
+          )}
+        </ul>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

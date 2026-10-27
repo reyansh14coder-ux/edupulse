@@ -62,3 +62,8 @@ export function todayIST() {
   now.setHours(12, 0, 0, 0);
   return now;
 }
+
+export function weekMonday(from: Date = new Date()) {
+  const day = (from.getDay() + 6) % 7;
+  return new Date(from.getFullYear(), from.getMonth(), from.getDate() - day);
+}

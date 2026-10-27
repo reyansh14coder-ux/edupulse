@@ -8,9 +8,12 @@ import {
   CheckCircle2,
   ListChecks,
   Mail,
+  MessageCircleQuestion,
   MessageSquare,
+  Smile,
   Sparkles,
   Target,
+  Trophy,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -24,6 +27,7 @@ import {
 } from "@/lib/report-i18n";
 import { fmtDate, pct } from "@/lib/utils";
 import { PrintButton, ShareReportButton } from "@/components/report-actions";
+import { SubjectDive } from "@/components/dive-deeper";
 import {
   Avatar,
   Badge,
@@ -277,41 +281,36 @@ export default async function ParentReportPage({
               {t.subjectsTitle}
             </h3>
             <p className="mt-1 text-[12.5px] text-ink-500">{t.subjectsSub}</p>
-            <ul className="mt-3 space-y-3">
+            <ul className="mt-3 space-y-4">
               {report.subjects.map((s, i) => (
-                <li
-                  key={i}
-                  className="rounded-xl border border-line bg-surface/60 p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-[14px] font-extrabold text-ink-900">
-                      {s.subject}
-                    </span>
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-extrabold text-brand-600">
-                      {pct(s.avg)}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Delta value={s.trend} />
-                      <span className="text-[11.5px] font-semibold text-ink-400">
-                        {t.delta}
-                      </span>
-                    </span>
-                    <span className="text-[11.5px] text-ink-400">
-                      {s.count} assessment{s.count === 1 ? "" : "s"}
-                    </span>
+                <li key={i}>
+                  <SubjectDive
+                    subject={s.subject}
+                    summary={s.rec}
+                    avg={s.avg}
+                    count={s.count}
+                    trend={s.trend}
+                    weak={s.weakChapters.map((ch) => ({ chapter: ch, pct: 0 }))}
+                    labels={{
+                      btn: t.diveBtn,
+                      up: t.diveUp,
+                      down: t.diveDown,
+                      flat: t.diveFlat,
+                      tests: t.diveTests,
+                      focus: t.diveFocus,
+                      loading: t.diveLoading,
+                      error: t.diveError,
+                      retry: t.diveRetry,
+                    }}
+                  />
+                  <div className="mt-2 rounded-xl border border-mint-200 bg-mint-500/5 px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-mint-700">
+                      <Target size={12} /> {t.adviceLabel}
+                    </p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-ink-700">
+                      {s.action}
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-700">
-                    {s.rec}
-                  </p>
-                  {s.weakChapters.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {s.weakChapters.map((ch) => (
-                        <Badge key={ch} tone="warning">
-                          {ch}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
                 </li>
               ))}
               {!report.subjects.length && (
@@ -332,7 +331,7 @@ export default async function ParentReportPage({
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={n.kind === "Teacher" ? "brand" : "success"}>
-                      {n.kind === "Teacher" ? n.category : "Counselor"}
+                      {n.kind === "Teacher" ? n.category : "Guidance"}
                     </Badge>
                     <span className="text-[12px] text-ink-500">
                       {n.author} · {fmtDate(n.date)}
@@ -350,6 +349,70 @@ export default async function ParentReportPage({
                 <li className="text-[13px] text-ink-500">
                   {t.noTeacherAdvice}
                 </li>
+              )}
+            </ul>
+          </div>
+        </div>
+
+        <div className="grid border-b border-line lg:grid-cols-2">
+          <div className="border-b border-line p-6 lg:border-b-0 lg:border-r">
+            <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+              <Smile size={16} className="text-mint-600" /> {t.behaviourTitle}
+            </h3>
+            <ul className="mt-3 space-y-3">
+              {report.behaviour.map((b, i) => (
+                <li
+                  key={i}
+                  className="rounded-xl border border-line bg-surface/60 p-3.5"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-[13.5px] font-extrabold text-ink-900">
+                      {b.title}
+                    </span>
+                    <span className="text-[11.5px] text-ink-400">
+                      {fmtDate(b.date)}
+                    </span>
+                  </div>
+                  {b.note && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
+                      {b.note}
+                    </p>
+                  )}
+                </li>
+              ))}
+              {!report.behaviour.length && (
+                <li className="text-[13px] text-ink-500">{t.behaviourEmpty}</li>
+              )}
+            </ul>
+          </div>
+          <div className="p-6">
+            <h3 className="flex items-center gap-2 font-display text-[14.5px] font-extrabold text-ink-900">
+              <Trophy size={16} className="text-accent-600" />{" "}
+              {t.activitiesTitle}
+            </h3>
+            <ul className="mt-3 space-y-3">
+              {report.activities.map((a, i) => (
+                <li
+                  key={i}
+                  className="rounded-xl border border-line bg-surface/60 p-3.5"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-[13.5px] font-extrabold text-ink-900">
+                      {a.title}
+                    </span>
+                    <span className="text-[11.5px] text-ink-400">
+                      {fmtDate(a.date)}
+                    </span>
+                  </div>
+                  {a.note && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
+                      {a.note}
+                    </p>
+                  )}
+                </li>
+              ))}
+              {!report.activities.length && (
+                <li className="text-[13px] text-ink-500">{t.activitiesEmpty}</li>
               )}
             </ul>
           </div>
@@ -450,6 +513,22 @@ export default async function ParentReportPage({
           <ShareReportButton label={t.share} />
         </div>
       </Card>
+
+      <Link
+        href="/parent/ask"
+        className="mt-4 flex items-center gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 px-5 py-4 transition hover:bg-brand-50"
+      >
+        <MessageCircleQuestion size={20} className="shrink-0 text-brand-600" />
+        <span className="min-w-0">
+          <span className="block font-display text-[14px] font-extrabold text-ink-900">
+            {t.askQuery}
+          </span>
+          <span className="block text-[12.5px] text-ink-500">
+            {t.askQuerySub}
+          </span>
+        </span>
+        <ArrowLeft size={16} className="ml-auto shrink-0 rotate-180 text-brand-500" />
+      </Link>
 
       <p className="mt-4 text-center text-[12px] text-ink-400">
         Privacy-first: every view and share is recorded in the school&apos;s audit log.

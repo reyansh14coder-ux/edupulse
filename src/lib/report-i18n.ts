@@ -93,6 +93,26 @@ type Copy = {
   trendDown: string;
   sGaps: (chapters: string) => string;
   noSubjects: string;
+  sAction: (
+    subject: string,
+    chapter: string | null,
+    level: "excellent" | "good" | "revise" | "urgent"
+  ) => string;
+  behaviourTitle: string;
+  behaviourEmpty: string;
+  activitiesTitle: string;
+  activitiesEmpty: string;
+  askQuery: string;
+  askQuerySub: string;
+  diveBtn: string;
+  diveUp: string;
+  diveDown: string;
+  diveFlat: string;
+  diveTests: (n: number) => string;
+  diveFocus: string;
+  diveLoading: (subject: string) => string;
+  diveError: string;
+  diveRetry: string;
 };
 
 export const REPORT_COPY: Record<Lang, Copy> = {
@@ -189,6 +209,32 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     trendDown: " Trend is declining — act early.",
     sGaps: (chapters) => ` Weak chapters: ${chapters}.`,
     noSubjects: "No subject scores recorded yet.",
+    sAction: (subject, chapter, level) => {
+      const focus = chapter ? `${subject} — ${chapter}` : subject;
+      if (level === "excellent")
+        return `Ask your child to teach you one tricky ${focus} concept this week — explaining it aloud locks in learning.`;
+      if (level === "good")
+        return `Revise ${focus} together for 15 minutes before the next test — two short sessions beat one long one.`;
+      if (level === "revise")
+        return `Help your child re-solve 10 questions from ${focus} this week and check the ones they got wrong together.`;
+      return `Spend 15 minutes daily this week on ${focus} basics — start with the chapter video, then one practice quiz together.`;
+    },
+    behaviourTitle: "Behaviour & wellbeing this week",
+    behaviourEmpty: "No behaviour notes recorded this week.",
+    activitiesTitle: "Extracurricular activities this week",
+    activitiesEmpty: "No activities logged this week.",
+    askQuery: "Have a question for the school?",
+    askQuerySub: "Send a query — teachers and admin reply right here.",
+    diveBtn: "Dive deeper",
+    diveUp: "improving",
+    diveDown: "recover soon",
+    diveFlat: "steady",
+    diveTests: (n) => `${n} test${n === 1 ? "" : "s"}`,
+    diveFocus: "Next focus",
+    diveLoading: (subject) => `Analysing ${subject} data…`,
+    diveError:
+      "Analysis could not be loaded right now. The summary above still works.",
+    diveRetry: "Try again",
   },
   hi: {
     title: "साप्ताहिक प्रगति रिपोर्ट",
@@ -283,6 +329,31 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     trendDown: " प्रवृत्ति गिर रही है — जल्दी कदम उठाएँ।",
     sGaps: (chapters) => ` कमज़ोर अध्याय: ${chapters}।`,
     noSubjects: "अभी कोई विषय-अंक दर्ज नहीं।",
+    sAction: (subject, chapter, level) => {
+      const focus = chapter ? `${subject} — ${chapter}` : subject;
+      if (level === "excellent")
+        return `इस हफ़्ते बच्चे से ${focus} का एक कठिन संकल्पना आपको समझाने को कहें — बोलकर समझाने से पढ़ाई पक्की होती है।`;
+      if (level === "good")
+        return `अगले टेस्ट से पहले ${focus} साथ में 15 मिनट दोहराएँ — दो छोटे सत्र एक लंबे सत्र से बेहतर हैं।`;
+      if (level === "revise")
+        return `इस हफ़्ते ${focus} के 10 प्रश्न दोबारा हल करने में मदद करें और ग़लतियाँ साथ में देखें।`;
+      return `इस हफ़्ते रोज़ 15 मिनट ${focus} की मूल बातों पर दें — पहले अध्याय वीडियो, फिर साथ में एक अभ्यास क्विज़।`;
+    },
+    behaviourTitle: "इस हफ़्ते व्यवहार व स्वास्थ्य",
+    behaviourEmpty: "इस हफ़्ते कोई व्यवहार टिप्पणी दर्ज नहीं।",
+    activitiesTitle: "इस हफ़्ते पाठ्यक्रमेतर गतिविधियाँ",
+    activitiesEmpty: "इस हफ़्ते कोई गतिविधि दर्ज नहीं।",
+    askQuery: "स्कूल से कोई प्रश्न है?",
+    askQuerySub: "प्रश्न भेजें — शिक्षक व प्रशासन यहीं उत्तर देंगे।",
+    diveBtn: "और गहराई से देखें",
+    diveUp: "सुधार हो रहा है",
+    diveDown: "जल्दी सुधारें",
+    diveFlat: "स्थिर",
+    diveTests: (n) => `${n} परीक्षण`,
+    diveFocus: "अगला फोकस",
+    diveLoading: (subject) => `${subject} का विश्लेषण हो रहा है…`,
+    diveError: "विश्लेषण अभी उपलब्ध नहीं है। ऊपर का सारांश फिर भी काम करता है।",
+    diveRetry: "दोबारा कोशिश करें",
   },
   mr: {
     title: "साप्ताहिक प्रगती अहवाल",
@@ -377,5 +448,30 @@ export const REPORT_COPY: Record<Lang, Copy> = {
     trendDown: " कल खाली पडत आहे — लवकर उपाय करा.",
     sGaps: (chapters) => ` कमकुवत धडे: ${chapters}.`,
     noSubjects: "अद्याप कोणतेही विषयगुण नोंदवलेले नाहीत.",
+    sAction: (subject, chapter, level) => {
+      const focus = chapter ? `${subject} — ${chapter}` : subject;
+      if (level === "excellent")
+        return `या आठवड्यात मुलाला/मुलीला ${focus} मधील एक कठीण संकल्पना तुम्हाला समजावून सांगा — म्हणून समजावलेले शिक्षण टिकते.`;
+      if (level === "good")
+        return `पुढील चाचणीपूर्वी ${focus} सोबत १५ मिनिटे पुन्हा पाहा — दोन छोट्या सत्रांपेक्षा एक लांब सत्र चांगले.`;
+      if (level === "revise")
+        return `या आठवड्यात ${focus} मधील १० प्रश्न पुन्हा सोडवण्यात मदत करा आणि चुका सोबत तपासा.`;
+      return `या आठवड्यात रोज १५ मिनिटे ${focus} मधील मूलभूत गोष्टींवर द्या — आधी धडा व्हिडिओ, मग सोबत एक सराव क्विझ.`;
+    },
+    behaviourTitle: "या आठवड्यातील वर्तन व निरोगीता",
+    behaviourEmpty: "या आठवड्यात वर्तनाच्या कोणत्याही टीपांची नोंद नाही.",
+    activitiesTitle: "या आठवड्यातील पाठ्यक्रमेतर क्रियाकलाप",
+    activitiesEmpty: "या आठवड्यात कोणताही क्रियाकलाप नोंदवलेला नाही.",
+    askQuery: "शाळेबद्दल कोणता प्रश्न आहे?",
+    askQuerySub: "प्रश्न पाठवा — शिक्षक व प्रशासन येथेच उत्तर देतील.",
+    diveBtn: "अधिक तपासा",
+    diveUp: "सुधार होत आहे",
+    diveDown: "लवकर सुधार करा",
+    diveFlat: "स्थिर",
+    diveTests: (n) => `${n} चाचण्या`,
+    diveFocus: "पुढील लक्ष",
+    diveLoading: (subject) => `${subject} चे विश्लेषण सुरू आहे…`,
+    diveError: "विश्लेषण आत्ता उपलब्ध नाही. वरील सारांश तरीही चालू आहे.",
+    diveRetry: "पुन्हा प्रयत्न करा",
   },
 };

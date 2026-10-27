@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { GraduationCap, Percent, Search, Users } from "lucide-react";
+import { GraduationCap, MessageSquareWarning, Percent, Search, Users } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { gradeTree } from "@/lib/admin";
 import { cn, pct } from "@/lib/utils";
+import { setStudentFeedbackStatusAction } from "@/app/actions/feedback";
 import {
   Avatar,
   Badge,
   Card,
+  CardHeader,
   EmptyState,
   PageHeader,
   StatCard,
@@ -28,7 +30,7 @@ export default async function AdminStudentsPage({
   const gradeFilter = sp.grade ?? "";
   const sectionFilter = sp.section ?? "";
 
-  const [classes, students, grades] = await Promise.all([
+  const [classes, students, grades, feedback] = await Promise.all([
     db.schoolClass.findMany({ orderBy: [{ name: "asc" }, { section: "asc" }] }),
     db.student.findMany({
       include: {
@@ -41,12 +43,24 @@ export default async function AdminStudentsPage({
       orderBy: [{ classId: "asc" }, { rollNo: "asc" }],
     }),
     gradeTree(),
+    db.studentFeedback.findMany({
+      include: {
+        student: {
+          include: {
+            user: { select: { name: true } },
+            schoolClass: { select: { name: true, section: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    }),
   ]);
 
   const allRows = students.map((s) => {
-    const avg = s.scores.length
-      ? s.scores.reduce((a, x) => a + (x.marks / x.assessment.maxMarks) * 100, 0) / s.scores.length
-      : 0;
+    const m = s.scores.reduce((a, x) => a + x.marks, 0);
+    const mx = s.scores.reduce((a, x) => a + x.assessment.maxMarks, 0);
+    const avg = mx > 0 ? (m / mx) * 100 : 0;
     const att = s.attendance.length
       ? (s.attendance.filter((a) => a.status !== "ABSENT").length / s.attendance.length) * 100
       : 100;
@@ -62,12 +76,16 @@ export default async function AdminStudentsPage({
       admissionNo: s.admissionNo,
       avg,
       att,
+      marks: m,
+      max: mx,
       parents: s.parentLinks.map((p) => p.parent.name),
     };
   });
 
   const totalStudents = allRows.length;
-  const schoolAvg = allRows.length ? allRows.reduce((a, r) => a + r.avg, 0) / allRows.length : 0;
+  const schoolMarks = allRows.reduce((a, r) => a + r.marks, 0);
+  const schoolMax = allRows.reduce((a, r) => a + r.max, 0);
+  const schoolAvg = schoolMax > 0 ? (schoolMarks / schoolMax) * 100 : 0;
 
   const activeGrade = grades.find((g) => g.name === gradeFilter) ?? null;
   const sectionsForGrade = activeGrade
@@ -233,6 +251,66 @@ export default async function AdminStudentsPage({
           </div>
         )}
       </Card>
+
+      <Card className="mt-5">
+        <CardHeader
+          title="Feedback & complaints from students"
+          sub="Suggestions, praise and complaints submitted by students reach the principal here."
+        />
+        <ul className="divide-y divide-line px-5 pb-5 pt-2">
+          {feedback.map((f) => (
+            <li key={f.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <Avatar name={f.student.user.name} size="sm" />
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-bold text-ink-900">
+                    {f.category === "COMPLAINT" ? "Complaint" : f.category === "PRAISE" ? "Praise" : "Suggestion"}
+                    <span className="font-semibold text-ink-500">· {f.student.user.name}</span>
+                    <span className="text-[12px] font-semibold text-ink-400">
+                      {f.student.schoolClass.name} {f.student.schoolClass.section}
+                    </span>
+                    <Badge tone="neutral">{f.subject}</Badge>
+                  </p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-ink-600">{f.body}</p>
+                  <p className="mt-0.5 text-[11.5px] text-ink-400">
+                    {f.createdAt.toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge tone={f.status === "RESOLVED" ? "success" : f.status === "REVIEWED" ? "info" : "danger"}>
+                  {f.status.toLowerCase()}
+                </Badge>
+                {f.status === "NEW" && (
+                  <MarkFbBtn id={f.id} status="REVIEWED" label="Review" />
+                )}
+                {f.status !== "RESOLVED" && (
+                  <MarkFbBtn id={f.id} status="RESOLVED" label="Resolve" />
+                )}
+              </div>
+            </li>
+          ))}
+          {!feedback.length && (
+            <li className="flex flex-col items-center gap-2 py-8 text-center text-[13px] text-ink-500">
+              <MessageSquareWarning size={20} className="text-ink-300" />
+              No student feedback yet — entries submitted from student dashboards appear here.
+            </li>
+          )}
+        </ul>
+      </Card>
     </div>
+  );
+}
+
+function MarkFbBtn({ id, status, label }: { id: string; status: string; label: string }) {
+  return (
+    <form action={setStudentFeedbackStatusAction.bind(null, id, status)}>
+      <button
+        type="submit"
+        className="rounded-lg border border-line bg-card px-2.5 py-1 text-[11.5px] font-bold text-ink-600 transition hover:border-brand-300 hover:text-brand-700"
+      >
+        {label}
+      </button>
+    </form>
   );
 }

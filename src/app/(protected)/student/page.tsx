@@ -19,7 +19,7 @@ import { AttendanceDonut, SubjectBars, TrendArea } from "@/components/charts";
 import { PracticeQuizButton } from "@/components/teacher-forms";
 import { refreshRecommendationsAction } from "@/app/actions/recommend";
 import { nextBestAction } from "@/lib/next-action";
-import { StudentVoiceCard } from "@/components/student-voice";
+import { StudentVoiceCard, FeedbackPrincipalCard } from "@/components/student-voice";
 import {
   Avatar,
   Badge,
@@ -330,8 +330,9 @@ export default async function StudentDashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <StudentVoiceCard />
+        <FeedbackPrincipalCard />
       </div>
 
       <Card className="mt-5">

@@ -23,9 +23,44 @@ type Props = {
   count: number;
   trend: number;
   weak: { chapter: string; pct: number }[];
+  labels?: DiveLabels;
 };
 
-export function SubjectDive({ subject, summary, avg, count, trend, weak }: Props) {
+export type DiveLabels = {
+  btn: string;
+  up: string;
+  down: string;
+  flat: string;
+  tests: (n: number) => string;
+  focus: string;
+  loading: (subject: string) => string;
+  error: string;
+  retry: string;
+};
+
+const EN_LABELS: DiveLabels = {
+  btn: "Dive deeper",
+  up: "improving",
+  down: "recover soon",
+  flat: "steady",
+  tests: (n) => `${n} test${n === 1 ? "" : "s"}`,
+  focus: "Next focus",
+  loading: (subject) => `Analysing your ${subject} data…`,
+  error:
+    "Analysis could not be loaded right now. Your gap list above still works.",
+  retry: "Try again",
+};
+
+export function SubjectDive({
+  subject,
+  summary,
+  avg,
+  count,
+  trend,
+  weak,
+  labels,
+}: Props) {
+  const L = { ...EN_LABELS, ...labels };
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<DeepDive | null>(null);
   const [tried, setTried] = useState(false);
@@ -78,8 +113,12 @@ export function SubjectDive({ subject, summary, avg, count, trend, weak }: Props
               ) : (
                 <span className="h-1 w-4 rounded-full bg-ink-300" />
               )}
-              {trendUp ? "improving" : trendDown ? "recover soon" : "steady"}
-              {count > 0 && <span className="font-medium text-ink-400">· {count} tests</span>}
+              {trendUp ? L.up : trendDown ? L.down : L.flat}
+              {count > 0 && (
+                <span className="font-medium text-ink-400">
+                  · {L.tests(count)}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -89,7 +128,7 @@ export function SubjectDive({ subject, summary, avg, count, trend, weak }: Props
           aria-expanded={open}
           className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-[12.5px] font-bold text-brand-700 transition hover:bg-brand-100"
         >
-          <Sparkles size={13} /> Dive deeper
+          <Sparkles size={13} /> {L.btn}
           <ChevronDown size={13} className={open ? "rotate-180 transition" : "transition"} />
         </button>
       </div>
@@ -103,7 +142,7 @@ export function SubjectDive({ subject, summary, avg, count, trend, weak }: Props
               key={w.chapter}
               className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11.5px] font-bold text-amber-700"
             >
-              Next focus · {w.chapter}
+              {L.focus} · {w.chapter}
             </span>
           ))}
         </div>
@@ -117,22 +156,21 @@ export function SubjectDive({ subject, summary, avg, count, trend, weak }: Props
                 <div key={i} className="h-3.5 animate-pulse rounded-full bg-ink-100" style={{ width: `${w}%` }} />
               ))}
               <p className="pt-1 text-[12px] font-semibold text-ink-400">
-                <Loader2 size={12} className="mr-1 inline animate-spin" /> Analysing your {subject} data…
+                <Loader2 size={12} className="mr-1 inline animate-spin" />{" "}
+                {L.loading(subject)}
               </p>
             </div>
           )}
 
           {!pending && !data && (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-line px-3.5 py-3">
-              <p className="text-[12.5px] text-ink-500">
-                Analysis could not be loaded right now. Your gap list above still works.
-              </p>
+              <p className="text-[12.5px] text-ink-500">{L.error}</p>
               <button
                 type="button"
                 onClick={load}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] font-bold text-brand-600 hover:border-brand-300"
               >
-                <RotateCcw size={12} /> Try again
+                <RotateCcw size={12} /> {L.retry}
               </button>
             </div>
           )}

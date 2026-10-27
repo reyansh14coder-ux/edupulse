@@ -3,21 +3,28 @@ import {
   BookOpen,
   CalendarCheck,
   ClipboardList,
+  MessageCircleQuestion,
+  NotebookPen,
   TrendingUp,
   TriangleAlert,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { teacherPulse } from "@/lib/insights";
-import { fmtDate, pct } from "@/lib/utils";
+import { fmtDate, pct, weekMonday } from "@/lib/utils";
+import { submitWeeklyReportAction } from "@/app/actions/teacher-report";
+import { replyQueryAction } from "@/app/actions/queries";
 import { SubjectBars, TrendArea } from "@/components/charts";
 import {
   Avatar,
   Badge,
+  Button,
   Card,
   CardHeader,
   PageHeader,
   StatCard,
+  inputCls,
+  labelCls,
 } from "@/components/ui";
 
 export const metadata = { title: "Teacher dashboard" };
@@ -25,6 +32,38 @@ export const metadata = { title: "Teacher dashboard" };
 export default async function TeacherDashboardPage() {
   const session = await requireSession(["TEACHER"]);
   const pulse = await teacherPulse(session.sub);
+
+  const weekOf = weekMonday();
+  const [thisWeekReport, assignments, teacherQueries] = await Promise.all([
+    db.teacherWeeklyReport.findUnique({
+      where: { teacherId_weekOf: { teacherId: session.sub, weekOf } },
+    }),
+    db.teacherAssignment.findMany({
+      where: { teacherId: session.sub },
+      select: { classId: true },
+    }),
+    db.parentQuery.findMany({
+      where: { recipient: "TEACHER", status: { not: "CLOSED" } },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      include: {
+        parent: { select: { name: true } },
+        repliedBy: { select: { name: true } },
+      },
+    }),
+  ]);
+  const classIds = assignments.map((a) => a.classId);
+  const myQueryIds = new Set(
+    classIds.length
+      ? (
+          await db.student.findMany({
+            where: { classId: { in: classIds } },
+            select: { id: true },
+          })
+        ).map((s) => s.id)
+      : []
+  );
+  const myQueries = teacherQueries.filter((q) => !q.studentId || myQueryIds.has(q.studentId));
 
   const classesLabel = [
     ...new Set(
@@ -190,6 +229,88 @@ export default async function TeacherDashboardPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Weekly report to admin"
+            sub={`Short note for the week of ${weekOf.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} — what you covered and who needs support.`}
+            action={
+              <Badge tone={thisWeekReport ? "success" : "warning"}>
+                {thisWeekReport ? "Submitted" : "Pending"}
+              </Badge>
+            }
+          />
+          <form action={submitWeeklyReportAction} className="space-y-3 px-5 pb-5 pt-3">
+            <textarea
+              name="body"
+              required
+              rows={4}
+              maxLength={1500}
+              defaultValue={thisWeekReport?.body ?? ""}
+              placeholder="Completed Algebra revision with Class 10; mock test on Friday. Aarav needs extra practice on word problems…"
+              className={inputCls}
+            />
+            <Button type="submit" variant={thisWeekReport ? "outline" : "primary"} className="w-full justify-center">
+              <NotebookPen size={15} />
+              {thisWeekReport ? "Update this week's report" : "Submit weekly report"}
+            </Button>
+          </form>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Questions from parents"
+            sub="Parents of your students asked these — reply below."
+            action={<Badge tone="info">{myQueries.length} open</Badge>}
+          />
+          <ul className="divide-y divide-line px-5 pb-5 pt-1">
+            {myQueries.map((q) => (
+              <li key={q.id} className="py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] font-bold text-ink-900">{q.parent.name}</span>
+                  {q.subject && <Badge tone="neutral">{q.subject}</Badge>}
+                  <Badge tone={q.reply ? "success" : "warning"}>
+                    {q.reply ? "answered" : "waiting"}
+                  </Badge>
+                  <span className="ml-auto text-[11.5px] text-ink-400">{fmtDate(q.createdAt)}</span>
+                </div>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-ink-700">{q.body}</p>
+                {q.reply ? (
+                  <p className="mt-1.5 rounded-xl border border-mint-200 bg-mint-500/5 px-3.5 py-2.5 text-[13px] text-ink-700">
+                    <span className="font-bold text-mint-600">
+                      {q.repliedBy ? `${q.repliedBy.name} replied: ` : "Answered: "}
+                    </span>
+                    {q.reply}
+                  </p>
+                ) : (
+                  <form action={replyQueryAction} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="id" value={q.id} />
+                    <input
+                      name="reply"
+                      required
+                      maxLength={1200}
+                      placeholder="Write a reply…"
+                      className="min-w-[200px] flex-1 rounded-xl border border-line bg-card px-3.5 py-2 text-[13.5px] text-ink-900 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700"
+                    >
+                      <MessageCircleQuestion size={14} /> Reply
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+            {!myQueries.length && (
+              <li className="py-6 text-center text-[13px] text-ink-500">
+                No open questions from parents of your students.
+              </li>
+            )}
+          </ul>
         </Card>
       </div>
     </div>

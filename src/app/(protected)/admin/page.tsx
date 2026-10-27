@@ -13,6 +13,7 @@ import { schoolPulse } from "@/lib/insights";
 import { gradeTree, teacherPerformance, schoolWeeklyReport } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { fmtDate, pct, cn } from "@/lib/utils";
+import { replyQueryAction } from "@/app/actions/queries";
 import {
   AttendanceDonut,
   ClassBars,
@@ -45,6 +46,34 @@ export default async function AdminOverviewPage({
   const weekReport = await schoolWeeklyReport(teachers);
 
   const allClasses = await db.schoolClass.findMany({ orderBy: [{ name: "asc" }, { section: "asc" }] });
+
+  const queries = await db.parentQuery.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    include: {
+      parent: { select: { name: true } },
+      repliedBy: { select: { name: true } },
+    },
+  });
+  const queryStudentIds = queries.map((q) => q.studentId).filter((v): v is string => !!v);
+  const queryStudents = queryStudentIds.length
+    ? await db.student.findMany({
+        where: { id: { in: queryStudentIds } },
+        select: { id: true, user: { select: { name: true } } },
+      })
+    : [];
+  const studentNameById = new Map(queryStudents.map((s) => [s.id, s.user.name]));
+  const queryRows = queries.map((q) => ({
+    id: q.id,
+    parentName: q.parent.name,
+    studentName: q.studentId ? studentNameById.get(q.studentId) ?? null : null,
+    recipient: q.recipient,
+    subject: q.subject,
+    body: q.body,
+    status: q.status,
+    reply: q.reply,
+    createdAt: q.createdAt,
+  }));
 
   // Class comparison: pick grade -> show its sections
   const grade = grades.find((g) => g.name === sp.grade) ?? grades[0];
@@ -81,7 +110,7 @@ export default async function AdminOverviewPage({
             href="/counseling"
             className="inline-flex items-center gap-2 rounded-xl border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink-700 transition hover:border-brand-300 hover:text-brand-700"
           >
-            <HeartHandshake size={16} /> Counseling center
+            <HeartHandshake size={16} /> Guidance center
           </Link>
         }
       />
@@ -348,6 +377,59 @@ export default async function AdminOverviewPage({
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card className="mt-5">
+        <CardHeader
+          title="Questions from parents"
+          sub="Sent to the principal or class teacher — reply right here."
+        />
+        <ul className="divide-y divide-line px-5 pb-5 pt-1">
+          {queryRows.map((q) => (
+            <li key={q.id} className="py-3.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={q.recipient === "PRINCIPAL" ? "brand" : "info"}>
+                  {q.recipient === "PRINCIPAL" ? "To principal" : "To teacher"}
+                </Badge>
+                {q.subject && <Badge tone="neutral">{q.subject}</Badge>}
+                <Badge tone={q.status === "ANSWERED" ? "success" : q.status === "CLOSED" ? "neutral" : "warning"}>
+                  {q.status.toLowerCase()}
+                </Badge>
+                <span className="ml-auto text-[11.5px] text-ink-400">
+                  {q.parentName}{q.studentName ? ` · ${q.studentName}` : ""} · {fmtDate(q.createdAt)}
+                </span>
+              </div>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-700">{q.body}</p>
+              {q.reply ? (
+                <p className="mt-1.5 rounded-xl border border-mint-200 bg-mint-500/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-700">
+                  <span className="font-bold text-mint-600">Answered:</span> {q.reply}
+                </p>
+              ) : (
+                <form action={replyQueryAction} className="mt-2 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={q.id} />
+                  <input
+                    name="reply"
+                    required
+                    maxLength={1200}
+                    placeholder="Type your reply to the parent…"
+                    className="min-w-[240px] flex-1 rounded-xl border border-line bg-card px-3.5 py-2 text-[13.5px] text-ink-900 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-brand-600 px-3.5 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700"
+                  >
+                    Reply
+                  </button>
+                </form>
+              )}
+            </li>
+          ))}
+          {!queries.length && (
+            <li className="py-6 text-center text-[13px] text-ink-500">
+              No questions from parents yet.
+            </li>
+          )}
+        </ul>
       </Card>
 
       <p className="mt-6 flex items-center gap-2 text-[12.5px] text-ink-400">

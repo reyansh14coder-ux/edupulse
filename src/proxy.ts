@@ -49,7 +49,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/student") ||
     pathname.startsWith("/parent") ||
     pathname.startsWith("/students") ||
-    pathname.startsWith("/counseling");
+    pathname.startsWith("/counseling") ||
+    pathname.startsWith("/notices") ||
+    pathname.startsWith("/competitions");
 
   if (isProtected && !role) {
     return NextResponse.redirect(new URL("/login", request.url));

@@ -1,10 +1,6 @@
 import { db } from "@/lib/db";
 import { callGeminiJSON } from "@/lib/gemini";
 
-function pctOf(marks: number, max: number) {
-  return max ? (marks / max) * 100 : 0;
-}
-
 export type GradeOption = { name: string; sections: { id: string; section: string; name: string }[] };
 
 /** Groups classes into grades -> sections. Grade = class name (e.g. "Class 9"). */
@@ -71,14 +67,16 @@ export async function teacherPerformance(): Promise<TeacherPerf[]> {
     ]);
 
     // per-student average -> teacher avg + good%
-    const perStudent = new Map<string, { sum: number; n: number }>();
+    const perStudent = new Map<string, { marks: number; max: number }>();
     for (const s of scores) {
-      const e = perStudent.get(s.studentId) ?? { sum: 0, n: 0 };
-      e.sum += pctOf(s.marks, s.assessment.maxMarks);
-      e.n += 1;
+      const e = perStudent.get(s.studentId) ?? { marks: 0, max: 0 };
+      e.marks += s.marks;
+      e.max += s.assessment.maxMarks;
       perStudent.set(s.studentId, e);
     }
-    const avgs = [...perStudent.values()].map((e) => (e.n ? e.sum / e.n : 0));
+    const avgs = [...perStudent.values()].map((e) =>
+      e.max > 0 ? (e.marks / e.max) * 100 : 0
+    );
     const avgScore = avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : 0;
     const goodPct = avgs.length ? (avgs.filter((a) => a >= 75).length / avgs.length) * 100 : 0;
 
@@ -92,8 +90,13 @@ export async function teacherPerformance(): Promise<TeacherPerf[]> {
       const d = new Date(s.assessment.date).getTime();
       return d >= twentyEight && d < fourteen;
     });
-    const rAvg = recent.length ? recent.reduce((a, s) => a + pctOf(s.marks, s.assessment.maxMarks), 0) / recent.length : 0;
-    const pAvg = prior.length ? prior.reduce((a, s) => a + pctOf(s.marks, s.assessment.maxMarks), 0) / prior.length : 0;
+    const wAvg = (arr: typeof scores) => {
+      const m = arr.reduce((a, s) => a + s.marks, 0);
+      const mx = arr.reduce((a, s) => a + s.assessment.maxMarks, 0);
+      return mx > 0 ? (m / mx) * 100 : 0;
+    };
+    const rAvg = wAvg(recent);
+    const pAvg = wAvg(prior);
     const weeklyDelta = prior.length && recent.length ? rAvg - pAvg : 0;
 
     const complaints = t.feedbackAbout.filter((f) => f.category === "COMPLAINT" && f.status !== "RESOLVED").length;
@@ -142,9 +145,9 @@ export async function schoolWeeklyReport(teachers: TeacherPerf[]): Promise<Schoo
     db.counselingSession.count(),
   ]);
 
-  const overall = scores.length
-    ? scores.reduce((a, s) => a + pctOf(s.marks, s.assessment.maxMarks), 0) / scores.length
-    : 0;
+  const totalMarks = scores.reduce((a, s) => a + s.marks, 0);
+  const totalMax = scores.reduce((a, s) => a + s.assessment.maxMarks, 0);
+  const overall = totalMax > 0 ? (totalMarks / totalMax) * 100 : 0;
   const attPct = attendance.length
     ? (attendance.filter((a) => a.status !== "ABSENT").length / attendance.length) * 100
     : 100;

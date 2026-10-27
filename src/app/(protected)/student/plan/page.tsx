@@ -1,21 +1,18 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   BookOpenCheck,
   CheckCircle2,
   Flag,
-  Lightbulb,
-  Play,
   Plus,
   Sparkles,
-  Target,
-  XCircle,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { learningGaps } from "@/lib/gaps";
 import { improveFor } from "@/lib/improve";
 import { progressTimeline, studentPulse } from "@/lib/insights";
-import { SUBJECTS } from "@/lib/question-bank";
+import { SUBJECTS, SYLLABUS } from "@/lib/question-bank";
 import { ensureRecommendations } from "@/lib/ai";
 import { fmtDate } from "@/lib/utils";
 import { SubjectDive } from "@/components/dive-deeper";
@@ -27,6 +24,7 @@ import {
 } from "@/app/actions/goals";
 import { practiceForChapterAction } from "@/app/actions/quiz";
 import { PracticeQuizButton } from "@/components/teacher-forms";
+import { ImprovePicker, type ImproveSubject } from "@/components/improve-picker";
 import {
   Badge,
   btnOutline,
@@ -46,7 +44,11 @@ const SEVERITY_TONE = {
   strong: "success",
 } as const;
 
-export default async function StudentPlanPage() {
+export default async function StudentPlanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gsubj?: string }>;
+}) {
   const session = await requireSession(["STUDENT"]);
   const student = await db.student.findUnique({
     where: { userId: session.sub },
@@ -54,7 +56,9 @@ export default async function StudentPlanPage() {
   });
   if (!student) notFound();
 
-  const [gaps, recs, goals, timeline, pulse] = await Promise.all([
+  const { gsubj } = await searchParams;
+
+  const [gaps, recs, goals, timeline, pulse, scores] = await Promise.all([
     learningGaps(student.id),
     ensureRecommendations(student.id),
     db.studentGoal.findMany({
@@ -63,7 +67,57 @@ export default async function StudentPlanPage() {
     }),
     progressTimeline(student.id, 14),
     studentPulse(student.id),
+    db.score.findMany({
+      where: { studentId: student.id },
+      include: {
+        assessment: { select: { title: true, subject: true, date: true, maxMarks: true } },
+      },
+      orderBy: { assessment: { date: "desc" } },
+      take: 300,
+    }),
   ]);
+
+  type RecentTest = {
+    title: string;
+    date: Date;
+    marks: number;
+    max: number;
+    pct: number;
+  };
+  const testsBySubject = new Map<string, RecentTest[]>();
+  for (const s of scores) {
+    const list = testsBySubject.get(s.assessment.subject) ?? [];
+    if (list.length < 5) {
+      list.push({
+        title: s.assessment.title,
+        date: s.assessment.date,
+        marks: s.marks,
+        max: s.assessment.maxMarks,
+        pct:
+          s.assessment.maxMarks > 0
+            ? (s.marks / s.assessment.maxMarks) * 100
+            : 0,
+      });
+    }
+    testsBySubject.set(s.assessment.subject, list);
+  }
+  const recentPct = (tests: RecentTest[]) => {
+    const m = tests.reduce((a, t) => a + t.marks, 0);
+    const mx = tests.reduce((a, t) => a + t.max, 0);
+    return mx > 0 ? (m / mx) * 100 : null;
+  };
+
+  const hasData = (name: string) =>
+    (testsBySubject.get(name)?.length ?? 0) > 0 ||
+    gaps.chapters.some((c) => c.subject === name);
+  const selected =
+    gsubj && (SUBJECTS as readonly string[]).includes(gsubj) && hasData(gsubj)
+      ? gsubj
+      : SUBJECTS.find(hasData) ?? SUBJECTS[0];
+  const recentTests = testsBySubject.get(selected) ?? [];
+  const recentAvg = recentPct(recentTests);
+  const selectedChapters = gaps.chapters.filter((c) => c.subject === selected);
+  const subjectRecs = recs.filter((r) => r.context === selected);
 
   const subjectRows = SUBJECTS.map((name) => {
     const stat = pulse?.subjects.find((s) => s.subject === name) ?? null;
@@ -82,6 +136,44 @@ export default async function StudentPlanPage() {
       weak: weak.slice(0, 3).map((w) => ({ chapter: w.chapter, pct: w.pct })),
       summary,
     };
+  });
+
+  const SEVERITY_RANK = { weak: 0, review: 1, new: 2, strong: 3 } as const;
+  const improveData: ImproveSubject[] = SUBJECTS.map((subject) => {
+    const gapChs = gaps.chapters.filter((c) => c.subject === subject);
+    const chapters = [
+      ...new Set([...gapChs.map((c) => c.chapter), ...(SYLLABUS[subject] ?? [])]),
+    ];
+    const topics = chapters
+      .map((chapter) => {
+        const gap = gapChs.find((c) => c.chapter === chapter);
+        const severity = gap ? gap.severity : ("new" as const);
+        const pct = gap?.pct ?? null;
+        const rec =
+          severity === "new"
+            ? `New for you — start with the video below, then try your first ${subject} quiz on ${chapter}.`
+            : severity === "weak"
+              ? `Focus chapter at ${Math.round(pct ?? 0)}% — a few short daily sessions on ${chapter} will lift your ${subject} score fastest.`
+              : severity === "review"
+                ? `Almost there at ${Math.round(pct ?? 0)}% — one careful revision round of ${chapter} should push it up.`
+                : `Solid at ${Math.round(pct ?? 0)}% — keep it fresh with a quick revision quiz.`;
+        return {
+          chapter,
+          severity,
+          pct,
+          correct: gap?.correct ?? 0,
+          total: gap?.total ?? 0,
+          wrong: gap?.wrong ?? [],
+          rec,
+          plan: improveFor(subject, chapter),
+        };
+      })
+      .sort(
+        (a, b) =>
+          SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+          (a.pct ?? 999) - (b.pct ?? 999)
+      );
+    return { subject, topics };
   });
 
   const approved = recs.filter((r) => r.planStatus === "APPROVED" && r.plan);
@@ -132,190 +224,205 @@ export default async function StudentPlanPage() {
           <Card>
             <CardHeader
               title="Learning gap detector"
-              sub="Chapter-wise accuracy from your quiz attempts — focus chapters first"
+              sub="Pick a subject — recent-test accuracy, chapter gaps and your AI focus note"
               action={
-                <Badge tone={gaps.weak.length ? "danger" : "success"}>
-                  {gaps.weak.length} chapter{gaps.weak.length === 1 ? "" : "s"} to revisit
-                </Badge>
+                recentAvg !== null ? (
+                  <Badge tone="brand">
+                    {selected} · {Math.round(recentAvg)}% recent
+                  </Badge>
+                ) : (
+                  <Badge tone="neutral">{selected} · no tests yet</Badge>
+                )
               }
             />
-            {gaps.chapters.length ? (
-              <div className="overflow-x-auto px-2 pb-4 pt-2">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wider text-ink-400">
-                      <th className="px-4 py-2 font-bold">Subject</th>
-                      <th className="px-4 py-2 font-bold">Chapter / topic</th>
-                      <th className="px-4 py-2 font-bold">Accuracy</th>
-                      <th className="px-4 py-2 font-bold">Level</th>
-                      <th className="px-4 py-2 font-bold"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaps.chapters.slice(0, 8).map((c, i) => (
-                      <tr key={i} className="border-t border-line">
-                        <td className="px-4 py-2.5 font-semibold text-ink-900">
-                          {c.subject}
-                        </td>
-                        <td className="px-4 py-2.5 text-ink-700">{c.chapter}</td>
-                        <td className="px-4 py-2.5 font-extrabold text-ink-900">
-                          {c.correct}/{c.total} · {Math.round(c.pct)}%
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Badge tone={SEVERITY_TONE[c.severity]}>
-                            {c.severity === "weak"
-                              ? "Focus"
-                              : c.severity === "review"
-                                ? "Review"
-                                : "Strong"}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          {c.severity !== "strong" && (
-                            <form action={practiceForChapterAction}>
-                              <input type="hidden" name="subject" value={c.subject} />
-                              <input type="hidden" name="chapter" value={c.chapter} />
-                              <button
-                                type="submit"
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] font-bold text-brand-600 transition hover:border-brand-300 hover:bg-brand-50"
-                              >
-                                <Sparkles size={12} /> Practice
-                              </button>
-                            </form>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="flex flex-wrap gap-1.5 px-5 pt-1">
+              {SUBJECTS.map((name) => {
+                const active = name === selected;
+                const tests = testsBySubject.get(name);
+                const p = tests?.length ? recentPct(tests) : null;
+                return (
+                  <Link
+                    key={name}
+                    href={`/student/plan?gsubj=${encodeURIComponent(name)}`}
+                    aria-current={active ? "true" : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12.5px] font-bold transition ${
+                      active
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-line bg-card text-ink-600 hover:border-brand-300 hover:text-brand-700"
+                    }`}
+                  >
+                    {name}
+                    {p !== null && (
+                      <span
+                        className={`text-[11px] font-extrabold ${
+                          active ? "text-white/80" : "text-ink-400"
+                        }`}
+                      >
+                        {Math.round(p)}%
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="space-y-4 p-5 pt-3">
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface/60 px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
+                    Last {recentTests.length || "no"} test
+                    {recentTests.length === 1 ? "" : "s"}
+                  </p>
+                  <p className="font-display text-xl font-extrabold text-ink-900">
+                    {recentAvg !== null ? `${Math.round(recentAvg)}%` : "—"}
+                  </p>
+                </div>
+                <div className="h-9 w-px bg-line" />
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
+                    Chapters to revisit
+                  </p>
+                  <p className="font-display text-xl font-extrabold text-ink-900">
+                    {selectedChapters.filter((c) => c.severity !== "strong").length}
+                  </p>
+                </div>
+                <div className="min-w-0 flex-1 text-right">
+                  <p className="text-[12px] leading-relaxed text-ink-500">
+                    {recentTests[0]
+                      ? `Latest: ${recentTests[0].title} · ${Math.round(recentTests[0].pct)}%`
+                      : `Attempt your first ${selected} quiz — its result will show up here.`}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <EmptyState
-                title="No quiz data yet"
-                hint="Attempt a few AI quizzes — your chapter-wise gaps will appear here automatically."
-                icon={<BookOpenCheck size={20} />}
-              />
-            )}
+
+              {subjectRecs.length > 0 && (
+                <div className="space-y-2">
+                  {subjectRecs.slice(0, 2).map((r) => (
+                    <div
+                      key={r.id}
+                      className="rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Sparkles size={13} className="text-brand-600" />
+                        <p className="font-display text-[13.5px] font-extrabold text-ink-900">
+                          {r.title}
+                        </p>
+                        {r.planStatus === "APPROVED" && r.plan && (
+                          <Badge tone="success">Teacher approved</Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
+                        {r.body}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recentTests.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[460px] text-left text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wider text-ink-400">
+                        <th className="px-4 py-2 font-bold">Recent test</th>
+                        <th className="px-4 py-2 font-bold">Date</th>
+                        <th className="px-4 py-2 font-bold text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentTests.map((t, i) => (
+                        <tr key={i} className="border-t border-line">
+                          <td className="px-4 py-2.5 font-semibold text-ink-900">
+                            {t.title}
+                          </td>
+                          <td className="px-4 py-2.5 text-ink-500">
+                            {fmtDate(t.date)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-extrabold text-ink-900">
+                            {t.marks}/{t.max} ·{" "}
+                            <span
+                              className={
+                                t.pct >= 75
+                                  ? "text-mint-600"
+                                  : t.pct >= 50
+                                    ? "text-accent-600"
+                                    : "text-rose-600"
+                              }
+                            >
+                              {Math.round(t.pct)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {selectedChapters.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-left text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wider text-ink-400">
+                        <th className="px-4 py-2 font-bold">Chapter / topic</th>
+                        <th className="px-4 py-2 font-bold">Accuracy</th>
+                        <th className="px-4 py-2 font-bold">Level</th>
+                        <th className="px-4 py-2 font-bold"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedChapters.slice(0, 10).map((c, i) => (
+                        <tr key={i} className="border-t border-line">
+                          <td className="px-4 py-2.5 text-ink-700">{c.chapter}</td>
+                          <td className="px-4 py-2.5 font-extrabold text-ink-900">
+                            {c.correct}/{c.total} · {Math.round(c.pct)}%
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Badge tone={SEVERITY_TONE[c.severity]}>
+                              {c.severity === "weak"
+                                ? "Focus"
+                                : c.severity === "review"
+                                  ? "Review"
+                                  : "Strong"}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {c.severity !== "strong" && (
+                              <form action={practiceForChapterAction}>
+                                <input type="hidden" name="subject" value={c.subject} />
+                                <input type="hidden" name="chapter" value={c.chapter} />
+                                <button
+                                  type="submit"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] font-bold text-brand-600 transition hover:border-brand-300 hover:bg-brand-50"
+                                >
+                                  <Sparkles size={12} /> Practice
+                                </button>
+                              </form>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  title={`No quiz data for ${selected} yet`}
+                  hint="Attempt a few AI quizzes — your chapter-wise gaps will appear here automatically."
+                  icon={<BookOpenCheck size={20} />}
+                />
+              )}
+            </div>
           </Card>
 
           <Card>
             <CardHeader
-              title="How to improve your gaps"
-              sub="Tricks, question types to practise and an explanation video for each focus chapter"
-              action={
-                <Badge tone="warning">
-                  {gaps.weak.length
-                    ? `${Math.min(gaps.weak.length, 3)} chapters covered`
-                    : "No gaps"}
-                </Badge>
-              }
+              title="Improve any topic"
+              sub="Pick a subject and topic — tricks, question types to practise and an explanation video"
+              action={<Badge tone="warning">Self-paced</Badge>}
             />
-            <div className="space-y-4 p-5 pt-4">
-              {gaps.weak.slice(0, 3).map((g, i) => {
-                const plan = improveFor(g.subject, g.chapter);
-                return (
-                  <div
-                    key={`${g.subject}-${g.chapter}-${i}`}
-                    className="rounded-2xl border border-line bg-surface/60 p-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={SEVERITY_TONE[g.severity]}>
-                        {g.severity === "weak" ? "Focus" : "Review"}
-                      </Badge>
-                      <p className="font-display text-[14.5px] font-extrabold text-ink-900">
-                        {g.subject} — {g.chapter}
-                      </p>
-                      <span className="text-[12px] font-bold text-ink-500">
-                        {Math.round(g.pct)}% accuracy ({g.correct}/{g.total})
-                      </span>
-                    </div>
-
-                    {g.wrong.length > 0 && (
-                      <div className="mt-3">
-                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-rose-500">
-                          <XCircle size={12} /> Questions you got wrong
-                        </p>
-                        <ul className="mt-1.5 space-y-2">
-                          {g.wrong.map((w, j) => (
-                            <li
-                              key={j}
-                              className="rounded-xl border border-rose-100 bg-rose-50/50 px-3.5 py-2.5"
-                            >
-                              <p className="text-[13px] font-semibold text-ink-800">
-                                {j + 1}. {w.q}
-                              </p>
-                              <p className="mt-1 flex flex-wrap gap-x-4 text-[12.5px] text-ink-600">
-                                <span className="text-rose-600">
-                                  Your answer: {w.yourAnswer}
-                                </span>
-                                <span className="font-semibold text-mint-600">
-                                  Correct: {w.correctAnswer}
-                                </span>
-                              </p>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
-                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-violet-600">
-                          <Lightbulb size={12} /> Tricks to solve
-                        </p>
-                        <ul className="mt-1.5 space-y-1.5">
-                          {plan.tricks.map((t, j) => (
-                            <li
-                              key={j}
-                              className="flex gap-2 text-[13px] leading-relaxed text-ink-700"
-                            >
-                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
-                              {t}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-3.5">
-                        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-wider text-brand-600">
-                          <Target size={12} /> Practice these question types
-                        </p>
-                        <ul className="mt-1.5 space-y-1.5">
-                          {plan.practice.map((t, j) => (
-                            <li
-                              key={j}
-                              className="flex gap-2 text-[13px] leading-relaxed text-ink-700"
-                            >
-                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
-                              {t}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <a
-                        href={plan.video.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-2 text-[12.5px] font-bold text-brand-600 transition hover:border-brand-300 hover:bg-brand-50"
-                      >
-                        <Play size={13} /> Watch explanation video
-                      </a>
-                      <span className="text-[12px] text-ink-400">
-                        {plan.video.title}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              {!gaps.weak.length && (
-                <EmptyState
-                  title="Every chapter is on track — great work!"
-                  hint="Once you attempt chapter-wise quizzes, personalised improvement plans with tricks, practice sets and videos will appear here."
-                  icon={<CheckCircle2 size={20} />}
-                />
-              )}
+            <div className="p-5 pt-4">
+              <ImprovePicker subjects={improveData} defaultSubject={selected} />
             </div>
           </Card>
 
