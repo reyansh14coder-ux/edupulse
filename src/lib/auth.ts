@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
+import { db } from "@/lib/db";
 import {
   SESSION_COOKIE,
   SESSION_SECRET,
@@ -92,6 +93,11 @@ export async function destroySession() {
 export async function requireSession(roles?: Role[]): Promise<Session> {
   const session = await getSession();
   if (!session) redirect("/login");
+  const user = await db.user.findUnique({
+    where: { id: session.sub },
+    select: { id: true },
+  });
+  if (!user) redirect("/login");
   if (roles && !roles.includes(session.role)) redirect(homeFor(session.role));
   return session;
 }
