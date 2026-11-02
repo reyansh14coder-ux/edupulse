@@ -291,17 +291,7 @@ export default async function ParentReportPage({
                     count={s.count}
                     trend={s.trend}
                     weak={s.weakChapters.map((ch) => ({ chapter: ch, pct: 0 }))}
-                    labels={{
-                      btn: t.diveBtn,
-                      up: t.diveUp,
-                      down: t.diveDown,
-                      flat: t.diveFlat,
-                      tests: t.diveTests,
-                      focus: t.diveFocus,
-                      loading: t.diveLoading,
-                      error: t.diveError,
-                      retry: t.diveRetry,
-                    }}
+                    lang={lang}
                   />
                   <div className="mt-2 rounded-xl border border-mint-200 bg-mint-500/5 px-3.5 py-2.5">
                     <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-mint-700">

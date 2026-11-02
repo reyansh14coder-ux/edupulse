@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { diveDeeperAction } from "@/app/actions/insights";
 import type { DeepDive } from "@/lib/deep-dive";
+import { REPORT_COPY, type Lang } from "@/lib/report-i18n";
 
 type Props = {
   subject: string;
@@ -23,32 +24,7 @@ type Props = {
   count: number;
   trend: number;
   weak: { chapter: string; pct: number }[];
-  labels?: DiveLabels;
-};
-
-export type DiveLabels = {
-  btn: string;
-  up: string;
-  down: string;
-  flat: string;
-  tests: (n: number) => string;
-  focus: string;
-  loading: (subject: string) => string;
-  error: string;
-  retry: string;
-};
-
-const EN_LABELS: DiveLabels = {
-  btn: "Dive deeper",
-  up: "improving",
-  down: "recover soon",
-  flat: "steady",
-  tests: (n) => `${n} test${n === 1 ? "" : "s"}`,
-  focus: "Next focus",
-  loading: (subject) => `Analysing your ${subject} data…`,
-  error:
-    "Analysis could not be loaded right now. Your gap list above still works.",
-  retry: "Try again",
+  lang?: Lang;
 };
 
 export function SubjectDive({
@@ -58,9 +34,20 @@ export function SubjectDive({
   count,
   trend,
   weak,
-  labels,
+  lang = "en",
 }: Props) {
-  const L = { ...EN_LABELS, ...labels };
+  const copy = REPORT_COPY[lang];
+  const L = {
+    btn: copy.diveBtn,
+    up: copy.diveUp,
+    down: copy.diveDown,
+    flat: copy.diveFlat,
+    tests: copy.diveTests,
+    focus: copy.diveFocus,
+    loading: copy.diveLoading,
+    error: copy.diveError,
+    retry: copy.diveRetry,
+  };
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<DeepDive | null>(null);
   const [tried, setTried] = useState(false);
