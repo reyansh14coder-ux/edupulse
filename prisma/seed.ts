@@ -21,6 +21,36 @@ const d = (y: number, m: number, day: number) => new Date(Date.UTC(y, m, day));
 
 async function main() {
   console.log("Clearing data...");
+  await db.surveyResponse.deleteMany();
+  await db.survey.deleteMany();
+  await db.learningResource.deleteMany();
+  await db.healthIncident.deleteMany();
+  await db.purchaseRequest.deleteMany();
+  await db.vendor.deleteMany();
+  await db.expense.deleteMany();
+  await db.budgetLine.deleteMany();
+  await db.appraisal.deleteMany();
+  await db.payrollRecord.deleteMany();
+  await db.jobApplication.deleteMany();
+  await db.vacancy.deleteMany();
+  await db.examOpportunity.deleteMany();
+  await db.chatMessage.deleteMany();
+  await db.helpdeskTicket.deleteMany();
+  await db.admissionEnquiry.deleteMany();
+  await db.staffProfile.deleteMany();
+  await db.visitorLog.deleteMany();
+  await db.galleryPhoto.deleteMany();
+  await db.transportRoute.deleteMany();
+  await db.leaveRequest.deleteMany();
+  await db.schoolEvent.deleteMany();
+  await db.bookIssue.deleteMany();
+  await db.libraryBook.deleteMany();
+  await db.feePayment.deleteMany();
+  await db.feeInvoice.deleteMany();
+  await db.feeHead.deleteMany();
+  await db.lessonPlan.deleteMany();
+  await db.substitution.deleteMany();
+  await db.timetableSlot.deleteMany();
   await db.recommendation.deleteMany();
   await db.studentActivity.deleteMany();
   await db.teacherWeeklyReport.deleteMany();
@@ -763,6 +793,365 @@ async function main() {
     ],
   });
 
+  console.log("Creating ERP demo data (timetable, fees, library, HRMS, finance)...");
+  const tBy = (s: string) => teachers.find((t) => t.subject === s)!.id;
+  const periodTime = (p: number) => {
+    const start = 8 * 60 + (p - 1) * 50;
+    const end = start + 45;
+    const fmt = (m: number) =>
+      `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    return { start: fmt(start), end: fmt(end) };
+  };
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  for (let ci = 0; ci < classes.length; ci++) {
+    const cls = classes[ci];
+    for (const day of days) {
+      for (let p = 1; p <= 8; p++) {
+        const subject = SUBJECTS[(p + ci + days.indexOf(day)) % SUBJECTS.length];
+        const { start, end } = periodTime(p);
+        await db.timetableSlot.create({
+          data: {
+            classId: cls.id,
+            day,
+            period: p,
+            startTime: start,
+            endTime: end,
+            subject,
+            room: p === 7 && subject === "Science" ? "Lab 1" : `Room ${100 + ci}`,
+            teacherId: tBy(subject),
+          },
+        });
+      }
+    }
+  }
+  await db.substitution.create({
+    data: {
+      classId: classes[2].id,
+      date: new Date(now.getTime() + 864e5),
+      period: 3,
+      subject: "Science",
+      originalTeacherId: rajesh.id,
+      substituteTeacherId: teachers.find((t) => t.subject === "English")!.id,
+      reason: "Rajesh Kumar on medical leave",
+    },
+  });
+
+  await db.lessonPlan.createMany({
+    data: [
+      {
+        teacherId: anjali.id,
+        classId: classes[3].id,
+        subject: "Mathematics",
+        weekOf: monday,
+        chapter: "Polynomials",
+        objectives: "Understand degrees of polynomials\nFactorise using identities\nSolve textbook exercise 2.1-2.3",
+        activities: "Warm-up quiz on identities\nPair work on factorisation\nBoard worked examples",
+        resources: "NCERT Class 9 Maths ch.2, https://www.youtube.com/results?search_query=class+9+polynomials",
+        status: "SUBMITTED",
+      },
+      {
+        teacherId: rajesh.id,
+        classId: classes[2].id,
+        subject: "Science",
+        weekOf: monday,
+        chapter: "Crop Production & Management",
+        objectives: "List agricultural practices\nExplain irrigation methods\nDescribe manures and fertilisers",
+        activities: "Video clip on modern farming\nGroup discussion on crop rotation\nLabel-the-diagram worksheet",
+        resources: "NCERT Class 8 Science ch.1",
+        status: "SUBMITTED",
+      },
+    ],
+  });
+
+  const feeHeads = await db.feeHead.createMany({
+    data: [
+      { name: "Tuition Fee", amount: 2500, frequency: "MONTHLY", description: "Monthly tuition for all grades" },
+      { name: "Transport Fee", amount: 1200, frequency: "MONTHLY", description: "Bus route charges" },
+      { name: "Laboratory Fee", amount: 800, frequency: "QUARTERLY", description: "Science & computer lab" },
+      { name: "Examination Fee", amount: 500, frequency: "ONE_TIME", description: "Half-yearly exam fee" },
+    ],
+  });
+  const tuitionHead = (await db.feeHead.findUnique({ where: { name: "Tuition Fee" } }))!;
+  for (let i = 0; i < 8 && i < students.length; i++) {
+    const st = students[i];
+    const paid = i % 2 === 0;
+    const inv = await db.feeInvoice.create({
+      data: {
+        studentId: st.id,
+        headId: tuitionHead.id,
+        title: "Tuition Fee — November 2026",
+        amount: 2500,
+        dueDate: new Date(2026, 10, 10),
+        status: paid ? "PAID" : i === 7 ? "OVERDUE" : "PENDING",
+        paidOn: paid ? new Date(2026, 10, 5 + i) : null,
+      },
+    });
+    if (paid) {
+      await db.feePayment.create({
+        data: {
+          studentId: st.id,
+          headId: tuitionHead.id,
+          invoiceId: inv.id,
+          amount: 2500,
+          period: "2026-11",
+          mode: i % 4 === 0 ? "UPI" : "CASH",
+          receiptNo: `RCP-${2600 + i}`,
+          recordedById: admin.id,
+          paidOn: new Date(2026, 10, 5 + i),
+        },
+      });
+    }
+  }
+  void feeHeads;
+
+  const books = await db.libraryBook.createMany({
+    data: [
+      { title: "Wings of Fire", author: "A.P.J. Abdul Kalam", category: "Biography", copies: 3, available: 2, shelf: "B-1" },
+      { title: "Malgudi Days", author: "R.K. Narayan", category: "Fiction", copies: 4, available: 4, shelf: "F-2" },
+      { title: "NCERT Mathematics Class 9", author: "NCERT", category: "Reference", copies: 10, available: 8, shelf: "R-1" },
+      { title: "The Jungle Book", author: "Rudyard Kipling", category: "Fiction", copies: 2, available: 1, shelf: "F-1" },
+      { title: "Science Experiments for Kids", author: "Pallavi Gogoi", category: "Science", copies: 2, available: 2, shelf: "S-3" },
+      { title: "Atlas of the World", author: "Oxford", category: "Reference", copies: 1, available: 1, shelf: "R-4" },
+      { title: "Panchatantra Tales", author: "Vishnu Sharma", category: "Fiction", copies: 5, available: 5, shelf: "F-3" },
+      { title: "Computer Basics", author: "Subham Dutta", category: "Technology", copies: 2, available: 2, shelf: "T-1" },
+    ],
+  });
+  const bookList = await db.libraryBook.findMany();
+  await db.bookIssue.createMany({
+    data: [
+      {
+        bookId: bookList[0].id,
+        studentId: students[0].id,
+        issuedOn: new Date(now.getTime() - 15 * 864e5),
+        dueOn: new Date(now.getTime() - 1 * 864e5),
+        status: "OVERDUE",
+      },
+      {
+        bookId: bookList[2].id,
+        studentId: students[1].id,
+        issuedOn: new Date(now.getTime() - 3 * 864e5),
+        dueOn: new Date(now.getTime() + 11 * 864e5),
+        status: "ISSUED",
+      },
+    ],
+  });
+  void books;
+
+  await db.schoolEvent.createMany({
+    data: [
+      { title: "Annual Sports Day", description: "Track & field events, house races and prize distribution at the main ground.", date: new Date(2026, 11, 12, 9), kind: "EVENT", audience: "ALL", location: "School Ground" },
+      { title: "Winter Break", description: "School closed for winter vacation.", date: new Date(2026, 11, 24), kind: "HOLIDAY", audience: "ALL" },
+      { title: "Parent–Teacher Meeting", description: "Class-wise PTM slots — report cards and progress discussions.", date: new Date(2026, 10, 22, 10), kind: "MEETING", audience: "PARENT", location: "Respective classrooms" },
+      { title: "Science Exhibition", description: "Working models by Classes 8-10 in the assembly hall. Parents welcome.", date: new Date(2026, 11, 5, 9), kind: "EVENT", audience: "ALL", location: "Assembly Hall" },
+      { title: "Half-Yearly Exams Begin", description: "Classes 6-10 half-yearly examinations commence.", date: new Date(2026, 11, 1), kind: "EXAM", audience: "STUDENT" },
+    ],
+  });
+
+  await db.leaveRequest.createMany({
+    data: [
+      { kind: "STUDENT", studentId: students[2].id, from: new Date(2026, 10, 6), to: new Date(2026, 10, 7), reason: "Family function out of town.", status: "PENDING" },
+      { kind: "STUDENT", studentId: students[4].id, from: new Date(2026, 10, 3), to: new Date(2026, 10, 3), reason: "Fever and doctor's advice to rest.", status: "APPROVED", reviewedById: admin.id, note: "Get well soon — class notes shared by classmates." },
+      { kind: "STAFF", staffId: teachers[4].id, from: new Date(2026, 10, 12), to: new Date(2026, 10, 13), reason: "Personal work.", status: "PENDING" },
+    ],
+  });
+
+  const route1 = await db.transportRoute.create({
+    data: {
+      name: "Route 1 — North Circuit",
+      busNo: "MH-12-AB-4410",
+      driver: "Ramesh Pawar",
+      phone: "+91 98765 40011",
+      timing: "Pick-up 7:10 AM · Drop 3:40 PM",
+      stops: "Ashok Nagar\nGreen Park\nCity Library\nSchool Gate",
+    },
+  });
+  await db.transportRoute.create({
+    data: {
+      name: "Route 2 — South Circuit",
+      busNo: "MH-12-CD-9921",
+      driver: "Sunita Devi",
+      phone: "+91 98765 40022",
+      timing: "Pick-up 7:25 AM · Drop 3:55 PM",
+      stops: "Station Road\nLake View\nMarket Square\nSchool Gate",
+    },
+  });
+  await db.student.update({ where: { id: students[0].id }, data: { transportRouteId: route1.id } });
+  await db.student.update({ where: { id: students[1].id }, data: { transportRouteId: route1.id } });
+
+  const gallerySeeds = [
+    { title: "Science Exhibition 2025", album: "Events", caption: "Working models by Class 9 on renewable energy." },
+    { title: "Sports Day Rehearsal", album: "Sports", caption: "House relay practice on the main ground." },
+    { title: "Library Week", album: "Academics", caption: "Students sharing their favourite reads." },
+    { title: "Independence Day Assembly", album: "Events", caption: "Flag hoisting and cultural performances." },
+    { title: "Art & Craft Corner", album: "Clubs", caption: "Diwali rangoli and poster-making workshop." },
+    { title: "Computer Lab Session", album: "Academics", caption: "Typing and scratch programming practice." },
+  ];
+  await db.galleryPhoto.createMany({
+    data: gallerySeeds.map((g, i) => ({
+      ...g,
+      url: `https://picsum.photos/seed/vidyora${i + 1}/640/420`,
+      takenOn: new Date(now.getTime() - (i + 2) * 7 * 864e5),
+      uploadedById: admin.id,
+    })),
+  });
+
+  await db.visitorLog.createMany({
+    data: [
+      { name: "Mr. Suresh Gupta", phone: "+91 99887 76655", purpose: "Admission enquiry for Class 6", host: "Front Office", inTime: new Date(now.getTime() - 2 * 36e5), status: "INSIDE" },
+      { name: "Dr. Meera Kulkarni", phone: "+91 99887 11223", purpose: "Annual health check-up camp coordination", host: "Principal", inTime: new Date(now.getTime() - 26 * 36e5), outTime: new Date(now.getTime() - 24 * 36e5), status: "OUT" },
+    ],
+  });
+
+  for (let i = 0; i < teachers.length; i++) {
+    await db.staffProfile.create({
+      data: {
+        userId: teachers[i].id,
+        employeeId: `EMP-${100 + i + 1}`,
+        qualification: i % 2 === 0 ? "M.Sc., B.Ed." : "M.A., B.Ed.",
+        experience: `${6 + i * 2} years`,
+        joinedOn: new Date(2015 + i, 5, 1 + i),
+        bio: `Experienced ${teachers[i].subject} teacher committed to concept-first learning and regular student feedback.`,
+        emergencyPhone: "+91 98765 400" + (10 + i),
+      },
+    });
+  }
+
+  await db.helpdeskTicket.createMany({
+    data: [
+      { raisedById: students[0].userId, role: "STUDENT", studentId: students[0].id, subject: "Duplicate charge on transport fee", body: "I was charged the transport fee twice for October. Please check and refund the extra payment.", category: "FEES", status: "OPEN" },
+      { raisedById: teachers[0].id, role: "TEACHER", subject: "Projector in Room 102 not working", body: "The projector in Room 102 has been flickering since Monday. Please raise a maintenance request.", category: "FACILITIES", status: "ANSWERED", reply: "Maintenance visit scheduled for tomorrow morning — the AV technician will swap the lamp.", repliedById: admin.id },
+    ],
+  });
+
+  await db.chatMessage.createMany({
+    data: [
+      { fromId: admin.id, toId: teachers[0].id, body: "Please submit this week's class report by Friday evening." },
+      { fromId: teachers[0].id, toId: admin.id, body: "Will do — mock test scores are being compiled today." },
+      { fromId: admin.id, classId: classes[0].id, body: "Reminder: Science exhibition registrations close this Thursday." },
+    ],
+  });
+
+  await db.admissionEnquiry.createMany({
+    data: [
+      { name: "Riya Deshmukh", phone: "+91 98200 11111", email: "riya.parent@example.com", grade: "Class 6", message: "Looking for admission for my daughter — CBSE curriculum.", status: "NEW" },
+      { name: "Amitabh Joshi", phone: "+91 98200 22222", grade: "Class 9", message: "Transferring from ICSE school mid-year. Need seat availability.", status: "FOLLOW_UP" },
+      { name: "Farhan Qureshi", phone: "+91 98200 33333", email: "farhan.q@example.com", grade: "Class 7", message: "Enquiry about transport facility and fee structure.", status: "ADMITTED" },
+    ],
+  });
+
+  const survey = await db.survey.create({
+    data: {
+      title: "Lunch menu feedback",
+      question: "How satisfied are you with the mid-day lunch menu this month?",
+      options: JSON.stringify(["Love it", "It's okay", "Needs improvement"]),
+      audience: "STUDENT",
+      closesOn: new Date(now.getTime() + 10 * 864e5),
+    },
+  });
+  await db.surveyResponse.createMany({
+    data: [
+      { surveyId: survey.id, respondentId: students[0].userId, choice: 0 },
+      { surveyId: survey.id, respondentId: students[1].userId, choice: 1 },
+      { surveyId: survey.id, respondentId: students[3].userId, choice: 2 },
+    ],
+  });
+
+  await db.examOpportunity.createMany({
+    data: [
+      { name: "NTSE (National Talent Search Exam)", body: "Stage-1 state-level scholarship exam for Class 10 students. Covers MAT, SAT and an interview. Coaching material available with the maths and science departments.", examOn: new Date(2027, 1, 20), deadline: new Date(2026, 11, 15), classes: "Class 10", link: "https://www.google.com/search?q=NTSE+exam" },
+      { name: "International Mathematics Olympiad (IMO)", body: "Annual Olympiad conducted by SOF. School-level round open to all classes — registers through the maths department.", examOn: new Date(2026, 11, 12), deadline: new Date(2026, 10, 30), classes: "Classes 6-10", link: "https://www.google.com/search?q=SOF+IMO" },
+      { name: "National Science Olympiad (NSO)", body: "Science Olympiad foundation's flagship exam. syllabus-aligned with NCERT — practice papers in the library reference section.", examOn: new Date(2026, 11, 20), deadline: new Date(2026, 11, 5), classes: "Classes 6-10", link: "https://www.google.com/search?q=SOF+NSO" },
+    ],
+  });
+
+  const vacancy1 = await db.vacancy.create({
+    data: { title: "TGT — Biology", department: "Science", subjects: "Biology, General Science", vacancies: 1, description: "Two-year experience preferred; must be comfortable with lab-based teaching for Classes 8-10.", status: "OPEN" },
+  });
+  const vacancy2 = await db.vacancy.create({
+    data: { title: "Primary Teacher — English", department: "Primary", subjects: "English", vacancies: 2, description: "For Classes 1-5. NTT/B.El.Ed. with strong phonics foundation.", status: "OPEN" },
+  });
+  await db.jobApplication.createMany({
+    data: [
+      { vacancyId: vacancy1.id, name: "Dr. Neha Rao", phone: "+91 99111 22334", email: "neha.rao@example.com", qualification: "Ph.D. Biology, B.Ed.", experience: "8 years", resumeNote: "Currently PGT Biology at Green Valley School; published 2 research papers.", status: "SHORTLISTED" },
+      { vacancyId: vacancy1.id, name: "Aakash Verma", phone: "+91 99111 55667", email: "aakash.v@example.com", qualification: "M.Sc. Life Sciences, B.Ed.", experience: "3 years", resumeNote: "Taught NSO/Olympiad batches; strong lab supervision experience.", status: "NEW" },
+      { vacancyId: vacancy2.id, name: "Shalini Pathak", phone: "+91 99111 88990", qualification: "B.El.Ed., NTT", experience: "5 years", resumeNote: "Phonics-certified; ran after-school reading club for 3 years.", status: "NEW" },
+    ],
+  });
+
+  for (let i = 0; i < teachers.length; i++) {
+    const basic = 32000 + i * 3500;
+    const allowances = 4000;
+    const deductions = basic * 0.08;
+    await db.payrollRecord.create({
+      data: {
+        staffId: teachers[i].id,
+        month: "2026-10",
+        basic,
+        allowances,
+        deductions: Math.round(deductions),
+        net: Math.round(basic + allowances - deductions),
+        status: i < 4 ? "PAID" : "DRAFT",
+        paidOn: i < 4 ? new Date(2026, 9, 28) : null,
+      },
+    });
+  }
+  await db.appraisal.createMany({
+    data: [
+      { staffId: anjali.id, period: "2026 H1", rating: 4.6, strengths: "Consistent board results, excellent parent communication.", improvements: "Could integrate more digital tools in class." },
+      { staffId: rajesh.id, period: "2026 H1", rating: 4.3, strengths: "Hands-on lab sessions and olympiad mentoring.", improvements: "Documentation of lesson plans can be more timely." },
+    ],
+  });
+
+  await db.budgetLine.createMany({
+    data: [
+      { category: "Salaries", planned: 4200000, year: "2026-27" },
+      { category: "Utilities", planned: 480000, year: "2026-27" },
+      { category: "Transport", planned: 650000, year: "2026-27" },
+      { category: "Maintenance", planned: 350000, year: "2026-27" },
+      { category: "Library & Labs", planned: 300000, year: "2026-27" },
+      { category: "Events & Activities", planned: 250000, year: "2026-27" },
+    ],
+  });
+  await db.expense.createMany({
+    data: [
+      { category: "Salaries", title: "October payroll — teaching staff", amount: 238000, vendor: "Internal", spentOn: new Date(2026, 9, 28) },
+      { category: "Utilities", title: "Electricity bill — October", amount: 41200, vendor: "MSEDCL", spentOn: new Date(2026, 9, 18) },
+      { category: "Transport", title: "Bus diesel & maintenance", amount: 56500, vendor: "City Fuel Co.", spentOn: new Date(2026, 9, 12) },
+      { category: "Library & Labs", title: "Science lab reagents restock", amount: 18750, vendor: "SciLab Supplies", spentOn: new Date(2026, 9, 8) },
+      { category: "Events & Activities", title: "Sports day trophies & medals", amount: 12400, vendor: "Trophy House", spentOn: new Date(2026, 9, 30) },
+      { category: "Maintenance", title: "Monsoon roof repairs", amount: 27800, vendor: "Sharma Contractors", spentOn: new Date(2026, 8, 22) },
+    ],
+  });
+  await db.vendor.createMany({
+    data: [
+      { name: "MSEDCL", category: "Utilities", phone: "+91 1912" },
+      { name: "SciLab Supplies", category: "Library & Labs", phone: "+91 98220 55443" },
+      { name: "City Fuel Co.", category: "Transport", phone: "+91 98220 66778" },
+    ],
+  });
+  await db.purchaseRequest.createMany({
+    data: [
+      { title: "10 new desktop computers for the computer lab", category: "Library & Labs", amount: 350000, requestedByName: teachers[5].name, status: "PENDING" },
+      { title: "Bus tyre replacement — Route 2", category: "Transport", amount: 48000, requestedByName: "Transport In-charge", status: "APPROVED" },
+    ],
+  });
+
+  await db.healthIncident.createMany({
+    data: [
+      { studentId: students[1].id, title: "Mild sprain during PE", note: "Ice pack applied; rested in the infirmary for 30 minutes. Parent informed.", severity: "MINOR", date: new Date(now.getTime() - 4 * 864e5) },
+      { title: "First-aid drill conducted", note: "Whole-school evacuation + first-aid awareness drill completed in 6 minutes.", severity: "INFO", date: new Date(now.getTime() - 20 * 864e5) },
+    ],
+  });
+
+  await db.learningResource.createMany({
+    data: [
+      { subject: "Mathematics", chapter: "Polynomials", title: "Class 9 Polynomials — full chapter", url: "https://www.youtube.com/results?search_query=class+9+polynomials+cbse", kind: "VIDEO" },
+      { subject: "Science", chapter: "Crop Production & Management", title: "Agriculture practices explained", url: "https://www.youtube.com/results?search_query=class+8+crop+production", kind: "VIDEO" },
+      { subject: "English", chapter: "The Fun They Had", title: "Chapter summary & discussion", url: "https://www.youtube.com/results?search_query=the+fun+they+had+class+9", kind: "VIDEO" },
+      { subject: "Social Science", chapter: "The French Revolution", title: "Animated French Revolution timeline", url: "https://www.youtube.com/results?search_query=french+revolution+class+9", kind: "VIDEO" },
+    ],
+  });
+
   const counts = {
     users: await db.user.count(),
     students: await db.student.count(),
@@ -771,6 +1160,10 @@ async function main() {
     scores: await db.score.count(),
     homework: await db.homework.count(),
     submissions: await db.homeworkSubmission.count(),
+    timetableSlots: await db.timetableSlot.count(),
+    feeInvoices: await db.feeInvoice.count(),
+    libraryBooks: await db.libraryBook.count(),
+    events: await db.schoolEvent.count(),
   };
   console.log("Seed complete:", counts);
 }

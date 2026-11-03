@@ -128,7 +128,7 @@ export default async function TeacherInsightsPage({
             </span>
             <div>
               <p className="text-[14px] font-extrabold text-ink-900">
-                This week's class brief
+                This week&apos;s class brief
               </p>
               <p className="text-[11.5px] text-ink-500">
                 Evidence-led summary and your next steps for {insights.className} – {insights.section}

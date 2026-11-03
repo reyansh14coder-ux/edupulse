@@ -225,17 +225,21 @@ export const labelCls = "mb-1.5 block text-[12.5px] font-bold text-ink-600";
 export function Button({
   type = "button",
   variant = "primary",
+  size = "md",
   className = "",
   children,
 }: {
   type?: "button" | "submit";
   variant?: "primary" | "outline" | "ghost";
+  size?: "sm" | "md";
   className?: string;
   children: ReactNode;
 }) {
   const base = variant === "primary" ? btnPrimary : variant === "outline" ? btnOutline : btnGhost;
+  const sizing =
+    size === "sm" ? "!rounded-lg !px-2.5 !py-1.5 !text-[12px]" : "";
   return (
-    <button type={type} className={`${base} ${className}`}>
+    <button type={type} className={`${base} ${sizing} ${className}`}>
       {children}
     </button>
   );

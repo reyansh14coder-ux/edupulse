@@ -31,6 +31,18 @@ model User {
   queriesRaised    ParentQuery[]      @relation("queryAuthor")
   weeklyNotes      TeacherWeeklyReport[]
   competitions     Competition[]      @relation("competitionAuthor")
+  timetableSlots   TimetableSlot[]
+  substitutionsMade Substitution[]    @relation("subOriginal")
+  substitutionsCovered Substitution[] @relation("subSubstitute")
+  lessonPlans      LessonPlan[]
+  staffProfile     StaffProfile?
+  staffLeave       LeaveRequest[]     @relation("staffLeave")
+  payroll          PayrollRecord[]    @relation("payroll")
+  appraisals       Appraisal[]        @relation("appraisal")
+  ticketsRaised    HelpdeskTicket[]   @relation("ticketAuthor")
+  ticketsReplied   HelpdeskTicket[]   @relation("ticketResponder")
+  chatSent         ChatMessage[]      @relation("chatFrom")
+  chatReceived     ChatMessage[]      @relation("chatTo")
 }
 
 model SchoolClass {
@@ -45,6 +57,9 @@ model SchoolClass {
   homeworks   Homework[]
   chapters    Chapter[]
   quizzes     Quiz[]
+  timetableSlots TimetableSlot[]
+  substitutions  Substitution[]
+  lessonPlans    LessonPlan[]
 
   @@unique([name, section, year])
 }
@@ -82,6 +97,13 @@ model Student {
   feedback      StudentFeedback[]
   applications  CompetitionApplication[]
   activities    StudentActivity[]
+  transportRoute TransportRoute?  @relation(fields: [transportRouteId], references: [id], onDelete: SetNull)
+  transportRouteId String?
+  feeInvoices   FeeInvoice[]
+  feePayments   FeePayment[]
+  bookIssues    BookIssue[]
+  leaveRequests LeaveRequest[]
+  healthIncidents HealthIncident[]
 }
 
 model ParentLink {
@@ -375,5 +397,411 @@ model StudentActivity {
   date        DateTime
   createdById String?
   createdAt   DateTime @default(now())
+}
+
+// ===== ERP: Timetable & substitution =====
+
+model TimetableSlot {
+  id         String      @id @default(cuid())
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId    String
+  day        String
+  period     Int
+  startTime  String
+  endTime    String
+  subject    String
+  room       String?
+  teacher    User?       @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherId  String?
+
+  @@unique([classId, day, period])
+}
+
+model Substitution {
+  id              String   @id @default(cuid())
+  schoolClass     SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId         String
+  date            DateTime
+  period          Int
+  subject         String
+  originalTeacher User     @relation("subOriginal", fields: [originalTeacherId], references: [id], onDelete: Cascade)
+  originalTeacherId String
+  substituteTeacher User   @relation("subSubstitute", fields: [substituteTeacherId], references: [id], onDelete: Cascade)
+  substituteTeacherId String
+  reason          String?
+  createdAt       DateTime @default(now())
+}
+
+model LessonPlan {
+  id         String      @id @default(cuid())
+  teacher    User        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId  String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId    String
+  subject    String
+  weekOf     DateTime
+  chapter    String
+  objectives String
+  activities String
+  resources  String?
+  status     String      @default("SUBMITTED")
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([teacherId, classId, subject, weekOf])
+}
+
+// ===== ERP: Fees =====
+
+model FeeHead {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  amount      Float
+  frequency   String        @default("MONTHLY")
+  invoices    FeeInvoice[]
+  payments    FeePayment[]
+}
+
+model FeeInvoice {
+  id        String     @id @default(cuid())
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  head      FeeHead?   @relation(fields: [headId], references: [id], onDelete: SetNull)
+  headId    String?
+  title     String
+  amount    Float
+  dueDate   DateTime
+  status    String     @default("PENDING")
+  paidOn    DateTime?
+  createdAt DateTime   @default(now())
+  payments  FeePayment[]
+}
+
+model FeePayment {
+  id         String   @id @default(cuid())
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+  head       FeeHead? @relation(fields: [headId], references: [id], onDelete: SetNull)
+  headId     String?
+  invoice    FeeInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceId  String?
+  amount     Float
+  period     String
+  mode       String   @default("CASH")
+  receiptNo  String
+  recordedById String?
+  paidOn     DateTime @default(now())
+}
+
+// ===== ERP: Library =====
+
+model LibraryBook {
+  id        String      @id @default(cuid())
+  title     String
+  author    String
+  isbn      String?
+  category  String      @default("General")
+  shelf     String?
+  copies    Int         @default(1)
+  available Int         @default(1)
+  issues    BookIssue[]
+}
+
+model BookIssue {
+  id         String       @id @default(cuid())
+  book       LibraryBook  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId     String
+  student    Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+  issuedOn   DateTime     @default(now())
+  dueOn      DateTime
+  returnedOn DateTime?
+  status     String       @default("ISSUED")
+}
+
+// ===== ERP: Calendar / events =====
+
+model SchoolEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  date        DateTime
+  kind        String   @default("EVENT")
+  audience    String   @default("ALL")
+  location    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== ERP: Leave =====
+
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  kind         String    @default("STUDENT")
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String?
+  staff        User?     @relation("staffLeave", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId      String?
+  from         DateTime
+  to           DateTime
+  reason       String
+  status       String    @default("PENDING")
+  reviewedById String?
+  note         String?
+  createdAt    DateTime  @default(now())
+}
+
+// ===== ERP: Transport =====
+
+model TransportRoute {
+  id       String    @id @default(cuid())
+  name     String
+  busNo    String
+  driver   String
+  phone    String?
+  timing   String
+  stops    String
+  students Student[]
+}
+
+// ===== ERP: Gallery =====
+
+model GalleryPhoto {
+  id           String   @id @default(cuid())
+  title        String
+  url          String
+  caption      String?
+  album        String   @default("General")
+  takenOn      DateTime @default(now())
+  uploadedById String?
+}
+
+// ===== ERP: Front office =====
+
+model VisitorLog {
+  id       String    @id @default(cuid())
+  name     String
+  phone    String?
+  purpose  String
+  host     String
+  inTime   DateTime  @default(now())
+  outTime  DateTime?
+  status   String    @default("INSIDE")
+}
+
+// ===== ERP: Staff profiles =====
+
+model StaffProfile {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String   @unique
+  employeeId     String?
+  qualification  String?
+  experience     String?
+  joinedOn       DateTime?
+  bio            String?
+  emergencyPhone String?
+}
+
+// ===== Communication: help desk =====
+
+model HelpdeskTicket {
+  id           String   @id @default(cuid())
+  raisedBy     User     @relation("ticketAuthor", fields: [raisedById], references: [id], onDelete: Cascade)
+  raisedById   String
+  role         String
+  studentId    String?
+  subject      String
+  body         String
+  category     String   @default("GENERAL")
+  status       String   @default("OPEN")
+  reply        String?
+  repliedById  String?
+  repliedBy    User?    @relation("ticketResponder", fields: [repliedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ChatMessage {
+  id        String    @id @default(cuid())
+  fromId    String
+  from      User      @relation("chatFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String?
+  to        User?     @relation("chatTo", fields: [toId], references: [id], onDelete: Cascade)
+  classId   String?
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ===== Admissions =====
+
+model AdmissionEnquiry {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  grade     String
+  message   String?
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+}
+
+// ===== Surveys =====
+
+model Survey {
+  id        String           @id @default(cuid())
+  title     String
+  question  String
+  options   String
+  audience  String           @default("ALL")
+  closesOn  DateTime?
+  createdAt DateTime         @default(now())
+  responses SurveyResponse[]
+}
+
+model SurveyResponse {
+  id           String   @id @default(cuid())
+  survey       Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  surveyId     String
+  respondentId String
+  choice       Int
+  createdAt    DateTime @default(now())
+
+  @@unique([surveyId, respondentId])
+}
+
+// ===== Competitive exam intelligence =====
+
+model ExamOpportunity {
+  id        String   @id @default(cuid())
+  name      String
+  body      String
+  examOn    DateTime?
+  deadline  DateTime?
+  classes   String?
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+// ===== HRMS =====
+
+model Vacancy {
+  id           String          @id @default(cuid())
+  title        String
+  department   String
+  subjects     String?
+  vacancies    Int             @default(1)
+  description  String?
+  status       String          @default("OPEN")
+  createdAt    DateTime        @default(now())
+  applications JobApplication[]
+}
+
+model JobApplication {
+  id            String   @id @default(cuid())
+  vacancy       Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  vacancyId     String
+  name          String
+  phone         String
+  email         String?
+  qualification String?
+  experience    String?
+  resumeNote    String?
+  status        String   @default("NEW")
+  createdAt     DateTime @default(now())
+}
+
+model PayrollRecord {
+  id         String   @id @default(cuid())
+  staff      User     @relation("payroll", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId    String
+  month      String
+  basic      Float
+  allowances Float    @default(0)
+  deductions Float    @default(0)
+  net        Float
+  status     String   @default("DRAFT")
+  paidOn     DateTime?
+
+  @@unique([staffId, month])
+}
+
+model Appraisal {
+  id          String   @id @default(cuid())
+  staff       User     @relation("appraisal", fields: [staffId], references: [id], onDelete: Cascade)
+  staffId     String
+  period      String
+  rating      Float
+  strengths   String?
+  improvements String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== Finance & control =====
+
+model BudgetLine {
+  id       String  @id @default(cuid())
+  category String
+  planned  Float
+  year     String
+
+  @@unique([category, year])
+}
+
+model Expense {
+  id           String   @id @default(cuid())
+  category     String
+  title        String
+  amount       Float
+  vendor       String?
+  status       String   @default("APPROVED")
+  spentOn      DateTime @default(now())
+  recordedById String?
+}
+
+model Vendor {
+  id       String @id @default(cuid())
+  name     String
+  category String
+  phone    String?
+  status   String @default("ACTIVE")
+}
+
+model PurchaseRequest {
+  id             String   @id @default(cuid())
+  title          String
+  category       String
+  amount         Float
+  requestedById  String?
+  requestedByName String  @default("")
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+}
+
+// ===== Health & safety =====
+
+model HealthIncident {
+  id        String   @id @default(cuid())
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  title     String
+  note      String?
+  severity  String   @default("MINOR")
+  date      DateTime @default(now())
+}
+
+// ===== YouTube learn / resources =====
+
+model LearningResource {
+  id       String   @id @default(cuid())
+  subject  String
+  chapter  String
+  title    String
+  url      String
+  kind     String   @default("VIDEO")
+  addedById String?
+  createdAt DateTime @default(now())
 }
 
